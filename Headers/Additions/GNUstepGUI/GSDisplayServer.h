@@ -52,6 +52,14 @@
 @class NSGraphicsContext;
 @class NSWindow;
 
+typedef enum {
+  GSWindowResizeEdgeNone   = 0,
+  GSWindowResizeEdgeTop    = 1,
+  GSWindowResizeEdgeBottom = 2,
+  GSWindowResizeEdgeLeft   = 4,
+  GSWindowResizeEdgeRight  = 8
+} GSWindowResizeEdge;
+
 #if !NO_GNUSTEP
 APPKIT_EXPORT GSDisplayServer *GSServerForWindow(NSWindow *window);
 APPKIT_EXPORT GSDisplayServer *GSCurrentServer(void);
@@ -164,6 +172,10 @@ APPKIT_EXPORT_CLASS
 
 - (NSPoint) mouselocation;
 - (NSPoint) mouseLocationOnScreen: (int)aScreen window: (int *)win;
+- (BOOL) beginWindowMove: (int)win withEvent: (NSEvent *)event;
+- (BOOL) beginWindowResize: (int)win
+           edges: (NSUInteger)edges
+         withEvent: (NSEvent *)event;
 - (BOOL) capturemouse: (int)win;
 - (void) releasemouse;
 - (void) setMouseLocation: (NSPoint)mouseLocation onScreen: (int)aScreen;
