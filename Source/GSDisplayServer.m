@@ -853,6 +853,23 @@ GSCurrentServer(void)
   return NSZeroPoint;
 }
 
+/** Ask the display system to begin moving a window using the pointer-button
+ * press represented by event. Backends without compositor-managed moves
+ * return NO so the standard decoration view uses its legacy tracking loop. */
+- (BOOL) beginWindowMove: (int)win withEvent: (NSEvent *)event
+{
+  return NO;
+}
+
+/** Ask the display system to begin resizing a window from the specified
+ * edges. Backends without compositor-managed resize return NO. */
+- (BOOL) beginWindowResize: (int)win
+           edges: (NSUInteger)edges
+         withEvent: (NSEvent *)event
+{
+  return NO;
+}
+
 /** Grabs the pointer device so that all future mouse events will be
     directed only to the window win. If successful, the return value
     is YES and this message must be balanced by a -releasemouse

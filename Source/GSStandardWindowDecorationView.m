@@ -241,6 +241,12 @@
   NSDate *distantPast = [NSDate distantPast];
   NSPoint delta, point;
 
+  if ([GSServerForWindow(window)
+        beginWindowMove: [window windowNumber] withEvent: event])
+    {
+      return;
+    }
+
   delta = [event locationInWindow];
 
   [window _captureMouse: nil];
@@ -320,6 +326,23 @@ calc_new_frame(NSRect frame, NSPoint point, NSPoint firstPoint,
   NSSize minSize, maxSize;
   int num = 0;
   GSResizeEdgeMode mode = [self resizeModeForPoint: firstPoint];
+  GSWindowResizeEdge edges = GSWindowResizeEdgeBottom;
+
+  if (mode == GSResizeEdgeBottomLeftMode)
+    {
+      edges |= GSWindowResizeEdgeLeft;
+    }
+  else if (mode == GSResizeEdgeBottomRightMode)
+    {
+      edges |= GSWindowResizeEdgeRight;
+    }
+  if ([GSServerForWindow(window)
+        beginWindowResize: [window windowNumber]
+                    edges: edges
+                withEvent: event])
+    {
+      return;
+    }
 
   frame = [window frame];
   minSize = [window minSize];

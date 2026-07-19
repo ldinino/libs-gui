@@ -167,6 +167,18 @@ static BOOL menuBarVisible = YES;
   return [_the_menu _isMain];
 }
 
+- (void) performClose: (id)sender
+{
+  if ([_the_menu isTransient])
+    {
+      [_the_menu closeTransient];
+    }
+  else
+    {
+      [_the_menu close];
+    }
+}
+
 - (void) orderFrontRegardless
 {
   NSInterfaceStyle style = NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", nil);
@@ -1646,6 +1658,7 @@ static BOOL menuBarVisible = YES;
 
   if (flag)
     {
+      [_aWindow setParentWindow: nil];
       supermenu = [self supermenu];
       if (supermenu != nil)
         {
@@ -1663,6 +1676,9 @@ static BOOL menuBarVisible = YES;
     }
   else
     {
+      supermenu = [self supermenu];
+      [_aWindow setParentWindow:
+        (supermenu != nil ? [supermenu window] : nil)];
       [nc removeObserver: self
                     name: NSWindowDidBecomeKeyNotification
                   object: nil];
@@ -1820,6 +1836,7 @@ static BOOL menuBarVisible = YES;
   
   if (_superMenu && ![self isTornOff])
     {                 
+      [_aWindow setParentWindow: [_superMenu window]];
       // query super menu for position
       [_aWindow setFrameOrigin: [_superMenu locationForSubmenu: self]];
       _superMenu->_attachedMenu = self;
@@ -1827,7 +1844,12 @@ static BOOL menuBarVisible = YES;
   else if ([_aWindow frame].origin.y <= 0 
     && _popUpButtonCell == nil)   // get geometry only if not set
     {
+      [_aWindow setParentWindow: nil];
       [self _setGeometry];
+    }
+  else
+    {
+      [_aWindow setParentWindow: nil];
     }
   
   NSDebugLLog (@"NSMenu", 
@@ -1841,6 +1863,7 @@ static BOOL menuBarVisible = YES;
 {
   NSPoint location;
   NSView *contentView;
+  NSWindow *parentWindow;
 
   if (_menu.transient)
     {
@@ -1856,6 +1879,13 @@ static BOOL menuBarVisible = YES;
   
   _oldHiglightedIndex = [[self menuRepresentation] highlightedItemIndex];
   _menu.transient = YES;
+
+  parentWindow = (_superMenu != nil) ? [_superMenu window] : [NSApp keyWindow];
+  if (parentWindow == nil)
+    {
+      parentWindow = [NSApp mainWindow];
+    }
+  [_bWindow setParentWindow: parentWindow];
   
   /*
    * Cache the old submenu if any and query the supermenu our position.
@@ -1953,6 +1983,7 @@ static BOOL menuBarVisible = YES;
     }
   
   [_bWindow orderOut: self];
+  [_bWindow setParentWindow: nil];
   [_view removeFromSuperviewWithoutNeedingDisplay];
 
   contentView = [_aWindow contentView];
