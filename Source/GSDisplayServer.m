@@ -754,6 +754,20 @@ GSCurrentServer(void)
   return 0;
 }
 
+/** Returns how many backing-store pixels the window has per point, i.e. the
+ * value [NSWindow -backingScaleFactor] reports.  It is 1.0 for a backend whose
+ * window base coordinates already are device pixels, which is why that is the
+ * default: an existing backend needs no change and keeps behaving exactly as
+ * before.  A backend that rasterises at a different resolution than it reports
+ * in base coordinates -- a Wayland backend on a fractionally scaled output,
+ * for instance -- must override this, otherwise code that quantises to whole
+ * device pixels (see [NSClipView -constrainScrollPoint:]) cannot do so.
+ */
+- (CGFloat) windowScaleFactor: (int) win
+{
+  return 1.0;
+}
+
 /** Set the maximum size (pixels) of the window */
 - (void) setmaxsize: (NSSize)size : (int) win
 {

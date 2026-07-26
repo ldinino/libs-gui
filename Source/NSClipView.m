@@ -49,6 +49,19 @@
 @end
 
 /*
+ * How many backing-store pixels one unit of view's window base coordinate
+ * space is worth.  Base coordinates are device pixels only when this is 1;
+ * on a fractionally scaled backing store it is not, and anything that has to
+ * land on a whole device pixel has to say so in these units.
+ */
+static inline CGFloat deviceScale (NSView *view)
+{
+  CGFloat scale = [[view window] backingScaleFactor];
+
+  return (scale > 0.0) ? scale : 1.0;
+}
+
+/*
  * Return the biggest integral (in device space) rect contained in rect. 
  * Conversion to/from device space is done using view.
  *
@@ -56,9 +69,19 @@
 static inline NSRect integralRect (NSRect rect, NSView *view)
 {
   NSRect output;
+  CGFloat scale = deviceScale (view);
   int rounded;
   
   output = [view convertRect: rect  toView: nil];
+
+  /* Base coordinates are not necessarily device pixels, so scale into device
+     pixels before rounding and back again afterwards.  At scale 1 -- every
+     backend whose base coordinates *are* device pixels -- this is exactly the
+     computation that was here before. */
+  output.origin.x *= scale;
+  output.origin.y *= scale;
+  output.size.width *= scale;
+  output.size.height *= scale;
 
   rounded = (int)(output.origin.x);
   if ((CGFloat)rounded != output.origin.x)
@@ -83,6 +106,11 @@ static inline NSRect integralRect (NSRect rect, NSView *view)
     {
       output.size.height = rounded - output.origin.y;
     }
+
+  output.origin.x /= scale;
+  output.origin.y /= scale;
+  output.size.width /= scale;
+  output.size.height /= scale;
 
   return [view convertRect: output  fromView: nil];
 }
@@ -388,6 +416,8 @@ static inline NSRect integralRect (NSRect rect, NSView *view)
 {
   NSRect	documentFrame;
   NSPoint	new = proposedNewOrigin;
+  NSPoint	anchor;
+  CGFloat	scale;
 
   if (_documentView == nil)
     {
@@ -425,11 +455,28 @@ static inline NSRect integralRect (NSRect rect, NSView *view)
      sure that when the coordinates are changed and we need to copy to
      do the scrolling, the difference is an integer and so we can copy
      the image translating it by an integer in device space - and not
-     by a float. */
-  
+     by a float.
+
+     Two things have to be right for that.  The units: rounding in base
+     coordinates only makes the difference whole when one base unit is one
+     device pixel, and on a fractionally scaled backing store it is not - at
+     1.5 pixels per point an odd number of points is one and a half pixels, the
+     copy lands on a half pixel and gets resampled, and since copy-on-scroll
+     reads and writes the same surface every further scroll resamples its own
+     previous output until the text is illegible.  And the origin of the
+     rounding: -convertPoint:toView: subtracts the current bounds origin, so
+     rounding the converted value puts the *sum* of the difference and the clip
+     view's own position on the grid, which is only the same thing as putting
+     the difference on the grid while that position is itself a whole number of
+     device pixels.  Round relative to where the current origin converts to,
+     and neither assumption is needed.  (At one pixel per point, with the clip
+     view on a whole coordinate, this is the same arithmetic as before.) */
+
+  scale = deviceScale (self);
+  anchor = [self convertPoint: _bounds.origin  toView: nil];
   new = [self convertPoint: new  toView: nil];
-  new.x = GSRoundTowardsInfinity(new.x);
-  new.y = GSRoundTowardsInfinity(new.y);
+  new.x = anchor.x + GSRoundTowardsInfinity((new.x - anchor.x) * scale) / scale;
+  new.y = anchor.y + GSRoundTowardsInfinity((new.y - anchor.y) * scale) / scale;
   new = [self convertPoint: new  fromView: nil];
   return new;
 }
