@@ -5975,6 +5975,25 @@ current key view.<br />
 
 - (CGFloat) backingScaleFactor
 {
+  /* How many backing-store pixels this window has per point.  Only the
+     display server knows: a backend may rasterise at a different resolution
+     than the one it reports in window base coordinates.  The default server
+     implementation answers 1.0, so a backend that does not draw that way is
+     unaffected. */
+  if (_windowNum > 0)
+    {
+      GSDisplayServer *srv = GSServerForWindow(self);
+
+      if (srv != nil)
+        {
+          CGFloat factor = [srv windowScaleFactor: _windowNum];
+
+          if (factor > 0.0)
+            {
+              return factor;
+            }
+        }
+    }
   return 1.0;
 }
 
