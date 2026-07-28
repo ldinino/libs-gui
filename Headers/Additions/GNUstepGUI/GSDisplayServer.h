@@ -90,6 +90,7 @@ APPKIT_EXPORT_CLASS
 - glPixelFormatClass;
 
 - (BOOL) handlesWindowDecorations;
+- (BOOL) serverConstrainsPopupPlacement;
 
 /* Drag and drop support. */
 + (BOOL) addDragTypes: (NSArray*)types toWindow: (NSWindow *)win;

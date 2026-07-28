@@ -283,6 +283,26 @@ GSCurrentServer(void)
   return YES;
 }
 
+/** Returns YES if the display server, and not the gui library, is
+ * responsible for keeping a transient or pop-up surface on screen.
+ *
+ * The gui library keeps such surfaces on screen by comparing the origin it
+ * computed against the screen rectangle. That only means anything on a server
+ * whose window origins really are absolute screen coordinates. A server that
+ * cannot report an absolute window position -- Wayland, where the compositor
+ * places windows and never tells the client where -- has to fabricate a
+ * coordinate space per window, so a computed origin of zero is not the left
+ * edge of anything and forcing an origin into that space moves the surface
+ * away from the point it was supposed to be at by an arbitrary amount.
+ * Such a server answers YES and constrains the surface itself.
+ *
+ * The default is NO, which is the behaviour every existing backend has.
+ */
+- (BOOL) serverConstrainsPopupPlacement
+{
+  return NO;
+}
+
 
 /* Drag and drop support. */
 /** Convienience method that calls -addDragTypes:toWindow: using the
