@@ -66,6 +66,7 @@
 #import "GSGuiPrivate.h"
 #import "NSDocumentFrameworkPrivate.h"
 #import "GNUstepGUI/GSTheme.h"
+#import "GNUstepGUI/GSDisplayServer.h"
 
 /*
   Drawing related:
@@ -1916,7 +1917,16 @@ static BOOL menuBarVisible = YES;
 	  style != NSMacintoshInterfaceStyle)
 	{
 	  location.x -= frame.size.width/2;
-	  if (location.x < 0)
+	  /* Keep the menu clear of the left edge of the screen -- but only
+	     where the origin computed above really is a screen coordinate.
+	     A display server that cannot report absolute window positions
+	     fabricates a coordinate space per window, so zero is not the
+	     left edge of anything there, and forcing the origin up to it
+	     drags the menu away from the pointer by however far that
+	     window's fabricated origin happens to be from zero. Such a
+	     server keeps the menu on screen itself. */
+	  if (location.x < 0
+	      && ![GSCurrentServer() serverConstrainsPopupPlacement])
 	    location.x = 0;
 	  location.y += 10;
 	}
