@@ -2254,6 +2254,61 @@ static BOOL menuBarVisible = YES;
     }
 }
 
+/* InSTEP divergence D-020 / ADR-0020 -- see the declaration in NSMenu.h. */
+
++ (BOOL) _instepDismissesMenusOnUse
+{
+  static BOOL resolved = NO;
+  static BOOL enabled = NO;
+
+  /* InSTEP's flag registry (SCOPE 4.1) requires every InSTEP* key to ship
+     with a false default, so reading the user default alone is the same
+     answer DesktopKit's +[InSTEPFeatureFlags isEnabled:] gives, without
+     making AppKit depend on DesktopKit. Resolved once, as 4.1's "read at
+     startup" prescribes. */
+  if (resolved == NO)
+    {
+      enabled = [[NSUserDefaults standardUserDefaults]
+                  boolForKey: @"InSTEPMenuDismissal"];
+      resolved = YES;
+    }
+  return enabled;
+}
+
+- (void) _instepDismissOpenMenus
+{
+  NSMenu *root = self;
+  int guard = 64;
+
+  /* Walk up to the root of the displayed tree. A torn-off menu is a root the
+     user deliberately kept, and -setTornOff: has already cleared its
+     supermenu's attachedMenu, so it cannot be reached from above either. */
+  while ([root isTornOff] == NO && [root supermenu] != nil
+         && [[root supermenu] attachedMenu] == root && guard-- > 0)
+    {
+      root = [root supermenu];
+    }
+  /* -detachSubmenu recurses deepest-first and leaves the root itself open,
+     which is what keeps the application's own root menu on screen. */
+  [[root menuRepresentation] detachSubmenu];
+}
+
+- (BOOL) _instepChainContainsWindow: (NSWindow *)aWindow
+{
+  NSMenu *menu = self;
+  int guard = 64;
+
+  while (menu != nil && guard-- > 0)
+    {
+      if ([menu window] == aWindow)
+        {
+          return YES;
+        }
+      menu = [menu attachedMenu];
+    }
+  return NO;
+}
+
 - (NSString*) description
 {
   return [NSString stringWithFormat: @"NSMenu: %@ (%@)",
@@ -2261,4 +2316,3 @@ static BOOL menuBarVisible = YES;
 }
 
 @end
-

@@ -1867,6 +1867,12 @@ static float menuBarHeight = 0.0;
   
   if (indexOfActionToExecute == -1)
     {
+      /* InSTEP D-020: the release did not land on a command, so the user
+         clicked outside it -- which closes the menu. */
+      if ([NSMenu _instepDismissesMenusOnUse])
+        {
+          [_attachedMenu _instepDismissOpenMenus];
+        }
       return YES;
     }
 
@@ -1888,6 +1894,18 @@ static float menuBarHeight = 0.0;
                   removeSubmenu: subMenusNeedRemoving] == NO)
     {
       return NO;
+    }
+
+  /* InSTEP D-020: a chosen command closes the menu. Deliberately after
+     -_executeItemAtIndex:removeSubmenu:, which answers NO when the item that
+     was released over is a submenu's controlling command -- the NeXTSTEP UI
+     Guidelines say clicking that is how a submenu is attached, so it has to
+     stay open. Deliberately before the action runs, matching what the branch
+     above already does for an in-window menu bar: the action may open a panel
+     or another menu of its own. */
+  if ([NSMenu _instepDismissesMenusOnUse])
+    {
+      [_attachedMenu _instepDismissOpenMenus];
     }
 
   [_attachedMenu performActionForItemAtIndex: indexOfActionToExecute];
