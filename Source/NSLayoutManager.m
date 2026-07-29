@@ -1334,11 +1334,12 @@ has the same y origin and height as the line frag rect it is in.
 
 - (BOOL) allowsNonContiguousLayout
 {
-  return NO;
+  return _allowsNonContiguousLayout;
 }
 
 - (void) setAllowsNonContiguousLayout: (BOOL)flag
 {
+  _allowsNonContiguousLayout = flag;
 }
 
 - (BOOL) hasNonContiguousLayout
@@ -1523,7 +1524,7 @@ attachmentSize(linefrag_t *lf, NSUInteger glyphIndex)
 
   if (la)
     {
-      while (la->pos != glyphIndex && la_i < lf->num_attachments)
+      while (la_i < lf->num_attachments && la->pos != glyphIndex)
         {
           la++;
           la_i++;
@@ -2302,19 +2303,14 @@ static void GSDrawPatternLine(NSPoint start, NSPoint end, NSInteger pattern, CGF
 }
 
 
-/*
-TODO: Add a general typesetterAttributes dictionary. Implement the
-hyphenation factor methods by setting/getting an attribute in this
-dictionary.
-*/
 -(float) hyphenationFactor
 {
-  return 0.0;
+  return _hyphenationFactor;
 }
 
 -(void) setHyphenationFactor: (float)factor
 {
-  NSLog(@"Warning: (NSLayoutManager) %s not implemented", __PRETTY_FUNCTION__);
+  _hyphenationFactor = factor;
 }
 
 

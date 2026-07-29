@@ -135,6 +135,7 @@
   RELEASE(_keyEquivalentFont);
   RELEASE(_sound);
   RELEASE(_backgroundColor);
+  RELEASE(_bezelColor);
 
   [super dealloc];
 }
@@ -430,6 +431,18 @@
 - (NSImage*) alternateImage
 {
   return _altImage;
+}
+
+/* A switch button in the mixed state shows a dash rather than the on state's
+ * check mark.  Returns that image, or nil for button types that have no
+ * distinct mixed indicator. */
+- (NSImage *) _mixedStateImage
+{
+  if (_cell_image == [NSImage imageNamed: @"NSSwitch"])
+    {
+      return [NSImage imageNamed: @"GSSwitchMixed"];
+    }
+  return nil;
 }
 
 /** <p>Returns the NSButtonCell's image position. See <ref type="type" 
@@ -853,7 +866,7 @@
 
 - (NSString *) stringValue
 {
-  return _cell.state ? @"1" : @"";
+  return [NSString stringWithFormat: @"%ld", (long)_cell.state];
 }
 
 - (void) setAttributedStringValue: (NSAttributedString *)attrString
@@ -888,6 +901,24 @@
 - (void) setBackgroundColor: (NSColor *)color
 {
   ASSIGN(_backgroundColor, color);
+
+  if (_control_view)
+    {
+      if ([_control_view isKindOfClass: [NSControl class]])
+        {
+          [(NSControl*)_control_view updateCell: self];
+        }
+    }
+}
+
+- (NSColor *) bezelColor
+{
+  return _bezelColor;
+}
+
+- (void) setBezelColor: (NSColor *)color
+{
+  ASSIGNCOPY(_bezelColor, color);
 
   if (_control_view)
     {
@@ -1116,6 +1147,16 @@
     {
       imageToDisplay = _cell_image;
       titleToDisplay = [self attributedTitle];
+    }
+
+  if (_cell.state == NSMixedState)
+    {
+      NSImage *mixedImage = [self _mixedStateImage];
+
+      if (mixedImage != nil)
+        {
+          imageToDisplay = mixedImage;
+        }
     }
 
   if (imageToDisplay && ipos != NSNoImage)
@@ -1353,7 +1394,17 @@
       imageToDisplay = _cell_image;
       titleToDisplay = [self attributedTitle];
     }
-  
+
+  if (_cell.state == NSMixedState)
+    {
+      NSImage *mixedImage = [self _mixedStateImage];
+
+      if (mixedImage != nil)
+        {
+          imageToDisplay = mixedImage;
+        }
+    }
+
   if (imageToDisplay)
     {
       imageSize = [imageToDisplay size];
@@ -1494,11 +1545,14 @@
 				 border.top : border.bottom);
       interiorFrame.size.height -= border.bottom + border.top;
 
-      /* Pushed in buttons contents are displaced to the bottom right 1px.  */
+      /* Pushed in buttons contents are displaced towards the bottom right, by
+         an amount the theme can change (or suppress).  */
       if (mask & NSPushInCellMask)
         {
-          interiorFrame = NSOffsetRect(interiorFrame, 1.0,
-	    [_control_view isFlipped] ? 1.0 : -1.0);
+          NSSize offset = [[GSTheme theme] buttonPushInOffsetForCell: self];
+
+          interiorFrame = NSOffsetRect(interiorFrame, offset.width,
+	    [_control_view isFlipped] ? offset.height : -offset.height);
         }
       return interiorFrame;
     }
@@ -1570,6 +1624,7 @@
   _keyEquivalentFont = TEST_RETAIN(_keyEquivalentFont);
   _sound = TEST_RETAIN(_sound);
   _backgroundColor = TEST_RETAIN(_backgroundColor);
+  _bezelColor = TEST_RETAIN(_bezelColor);
 
   return c;
 }
@@ -1600,6 +1655,10 @@
       if ([[self alternateTitle] length] > 0)
         {
           [aCoder encodeObject: [self alternateTitle] forKey: @"NSAlternateContents"];
+        }
+      if (_bezelColor != nil)
+        {
+          [aCoder encodeObject: _bezelColor forKey: @"NSBezelColor"];
         }
 
       buttonCellFlags.useButtonImageSource = (([NSImage imageNamed: @"NSSwitch"] == image) ||
@@ -1749,6 +1808,10 @@
       if ([aDecoder containsValueForKey: @"NSNormalImage"])
         {
           [self setImage: [aDecoder decodeObjectForKey: @"NSNormalImage"]];
+        }
+      if ([aDecoder containsValueForKey: @"NSBezelColor"])
+        {
+          [self setBezelColor: [aDecoder decodeObjectForKey: @"NSBezelColor"]];
         }
       if ([aDecoder containsValueForKey: @"NSAlternateContents"])
         {

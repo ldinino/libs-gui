@@ -837,7 +837,7 @@ static float menuBarHeight = 0.0;
               NSMenuItemCell *msr;
 
               msr = [r menuItemCellForItemAtIndex:
-                [m indexOfItemWithTitle: [_attachedMenu title]]];
+                [m indexOfItemWithSubmenu: _attachedMenu]];
               neededImageAndTitleWidth
                 = [msr titleWidth] + GSCellTextImageXDist;
             }
@@ -975,10 +975,15 @@ static float menuBarHeight = 0.0;
           _keyEqOffset = _cellSize.width - _keyEqWidth - popupImageWidth;
         }
 
-      [self setFrameSize: NSMakeSize(_cellSize.width + _leftBorderOffset, 
-                                     [self totalHeight] 
+      NSEdgeInsets insets = [[GSTheme theme] menuItemAreaInsets];
+
+      [self setFrameSize: NSMakeSize(_cellSize.width + _leftBorderOffset
+                                     + insets.left + insets.right,
+                                     [self totalHeight]
+                                     + insets.top + insets.bottom
                                      + menuBarHeight)];
-      [_titleView setFrame: NSMakeRect (0, [self totalHeight],
+      [_titleView setFrame: NSMakeRect (0, [self totalHeight]
+                                        + insets.top + insets.bottom,
                                         NSWidth (_bounds), menuBarHeight)];
     }
   _needsSizing = NO;
@@ -1068,9 +1073,10 @@ static float menuBarHeight = 0.0;
   else
     {
       NSRect theRect;
+      NSEdgeInsets insets = [[GSTheme theme] menuItemAreaInsets];
 
-      theRect.origin.y	= [self yOriginForItem: index];
-      theRect.origin.x = _leftBorderOffset;
+      theRect.origin.y	= [self yOriginForItem: index] + insets.bottom;
+      theRect.origin.x = _leftBorderOffset + insets.left;
       theRect.size = _cellSize;
       theRect.size.height = [self heightForItem: index];
 
@@ -1731,24 +1737,36 @@ static float menuBarHeight = 0.0;
                   // If the user moves the mouse into the main window
                   // horizontal menu, start tracking again.
                   NSWindow *mainWindow = [mainWindowMenuView window];
-                  NSPoint locationInMainWindow = [mainWindow 
-                    convertScreenToBase: locationInScreenCoordinates];
-		  if ([mainWindowMenuView 
-                        hitTest: locationInMainWindow] != nil)
-		    {
-                      int index = [mainWindowMenuView indexOfItemAtPoint: 
-                        [mainWindowMenuView 
-                          convertPoint: locationInMainWindow
-                              fromView: nil]];
-                      if (index != -1 &&
-                          index != [mainWindowMenuView highlightedItemIndex])
-                        {
-		          [self setHighlightedItemIndex: -1];
-		          return [mainWindowMenuView
-                                   _trackWithEvent: original
-                                   startingMenuView: mainWindowMenuView];
-                        }
-		    }
+                  /* Guard against the embedded menu view having been
+                   * removed from its host window (e.g. when external
+                   * Menu.app mode calls updateAllWindowsWithMenu:nil
+                   * while tracking is already in progress).  Without
+                   * this check, [nil convertScreenToBase:] returns
+                   * NSZeroPoint and hitTest: may yield a false positive,
+                   * causing spurious re-entry into menu-bar tracking. */
+                  if (mainWindow != nil
+                      && NSMouseInRect (locationInScreenCoordinates,
+                                        [mainWindow frame], NO))
+                    {
+                      NSPoint locationInMainWindow = [mainWindow
+                        convertScreenToBase: locationInScreenCoordinates];
+		      if ([mainWindowMenuView
+                            hitTest: locationInMainWindow] != nil)
+		        {
+                          int index = [mainWindowMenuView indexOfItemAtPoint:
+                            [mainWindowMenuView
+                              convertPoint: locationInMainWindow
+                                  fromView: nil]];
+                          if (index != -1 &&
+                              index != [mainWindowMenuView highlightedItemIndex])
+                            {
+		              [self setHighlightedItemIndex: -1];
+		              return [mainWindowMenuView
+                                       _trackWithEvent: original
+                                       startingMenuView: mainWindowMenuView];
+                            }
+		        }
+                    }
 		}
             }
 
@@ -1779,11 +1797,6 @@ static float menuBarHeight = 0.0;
 					inMode: NSEventTrackingRunLoopMode
 				       dequeue: YES];
 	  type = [event type];
-    if (type == NSLeftMouseUp || type == NSRightMouseUp || type == NSOtherMouseUp)
-      {
-          shouldFinish = YES;
-          break;  // Exit the loop to proceed to StopPeriodicEvents
-      }
 	  if (type == NSAppKitDefined)
 	    {
 	      [[event window] sendEvent: event];
@@ -1901,11 +1914,15 @@ static float menuBarHeight = 0.0;
   [nc postNotificationName: NSMenuDidBeginTrackingNotification
                     object: [self menu]];
  
-  if (NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", self) ==
-      NSWindows95InterfaceStyle &&
-      ![[self menu] isTransient] &&
-      ![[self menu] _ownedByPopUp])
+  if ([self isHorizontal] == YES
+      && ![[self menu] isTransient]
+      && ![[self menu] _ownedByPopUp])
     {
+      /* Keep the root horizontal menu view available while tracking any
+       * attached submenu so moving back over the bar can switch directly to
+       * another top-level menu without requiring a second click.  This is
+       * needed for both in-window menus and the hidden menu-bar window used
+       * by external Menu.app mode. */
       mainWindowMenuView = self;
     }
 

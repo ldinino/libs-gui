@@ -142,6 +142,7 @@ static inline void _loadNSSoundPlugIns (void)
 
 - (void)_stream
 {
+  ENTER_POOL
   NSUInteger bytesRead;
   BOOL success = NO;
   void *buffer;
@@ -163,7 +164,7 @@ static inline void _loadNSSoundPlugIns (void)
                   break;
                 }
               bytesRead = [_source readBytes: buffer
-                                     length: BUFFER_SIZE];
+                                      length: BUFFER_SIZE];
               [_readLock unlock];
               [_playbackLock lock];
               success = [_sink playBytes: buffer length: bytesRead];
@@ -174,14 +175,15 @@ static inline void _loadNSSoundPlugIns (void)
         } while (_shouldLoop == YES && _shouldStop == NO);
       
       [_sink close];
-      NSZoneFree (NSDefaultMallocZone(), buffer);
+      NSZoneFree(NSDefaultMallocZone(), buffer);
     }
   
-  RETAIN(self);
+  /* Retains self and target object for duration of perform
+   */
   [self performSelectorOnMainThread: @selector(_finished:)
                          withObject: [NSNumber numberWithBool: success]
                       waitUntilDone: YES];
-  RELEASE(self);
+  LEAVE_POOL
 }
 
 - (void)_finished: (NSNumber *)finishedPlaying
@@ -277,9 +279,9 @@ static inline void _loadNSSoundPlugIns (void)
   NSEnumerator *enumerator;
   Class sourceClass,
         sinkClass;
-    
-  _data = data;
-  RETAIN(_data);
+
+  // Use new data...
+  ASSIGN(_data, data);
   
   // Search for an GSSoundSource bundle that can play this data.
   enumerator = [sourcePlugIns objectEnumerator];
@@ -298,9 +300,9 @@ static inline void _loadNSSoundPlugIns (void)
         }
     }
   
-  enumerator = [sinkPlugIns objectEnumerator];
   /* FIXME: Grab the first available sink/device for now.  In the future
-       look for what is set in the GSSoundDeviceBundle default first. */
+     look for what is set in the GSSoundDeviceBundle default first. */
+  enumerator = [sinkPlugIns objectEnumerator];
   while ((sinkClass = [enumerator nextObject]) != nil)
     {
       if ([sinkClass canInitWithPlaybackDevice: nil])
@@ -335,7 +337,7 @@ static inline void _loadNSSoundPlugIns (void)
   if ([object_getClass(self) canInitWithPasteboard: pasteboard] == YES)
     {
       /* FIXME: Should this be @"NSGeneralPboardType" or @"NSSoundPboardType"?
-           Apple also defines "NSString *NSSoundPboardType". */
+	 Apple also defines "NSString *NSSoundPboardType". */
       NSData *d = [pasteboard dataForType: @"NSGeneralPboardType"];	
       return [self initWithData: d];	
     }

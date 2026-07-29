@@ -788,6 +788,22 @@ GSCurrentServer(void)
   return 1.0;
 }
 
+/** Declare whether the window belongs to an NSMenu, i.e. whether it is one of
+ * the two panels a menu draws itself in.  A backend that presents menus with a
+ * distinct window role needs this stated rather than inferred: window level
+ * and the presence of an AppKit parent do not identify a menu.  Several
+ * unrelated auxiliary windows -- the tool tip panel, the combo box list, the
+ * autocomplete list -- also sit at NSPopUpMenuWindowLevel, and they acquire a
+ * parent as soon as they are attached to their owner, which is a legitimate
+ * thing for them to do and must not turn them into menus.
+ *
+ * The default does nothing, which is correct for every backend that presents
+ * all windows alike.
+ */
+- (void) setWindowIsMenu: (BOOL)flag forWindow: (int) win
+{
+}
+
 /** Set the maximum size (pixels) of the window */
 - (void) setmaxsize: (NSSize)size : (int) win
 {

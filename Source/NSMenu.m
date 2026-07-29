@@ -125,6 +125,10 @@
 - (NSMenu *) _menu;
 @end
 
+@interface NSWindow (GSMenuPanelBackendWindow)
+- (void) _initBackendWindow;
+@end
+
 @interface NSMenuView (GNUstepPrivate)
 - (NSArray *)_itemCells;
 @end
@@ -160,6 +164,24 @@ static BOOL menuBarVisible = YES;
 - (NSMenu *) _menu
 {
     return _the_menu;
+}
+
+/* Tell the display server that this window is a menu, as soon as there is a
+ * window number to say it about.  A backend that gives menus their own window
+ * role cannot work this out for itself: the tool tip panel, the combo box list
+ * and the autocomplete list share NSPopUpMenuWindowLevel with a menu, and any
+ * of them may be given an AppKit parent by the code that owns it.
+ *
+ * -_initBackendWindow is the one place every NSWindow acquires its window
+ * number, and it is already where the level and the parent are handed to the
+ * server, so the role is settled at the same moment as the facts it refines.
+ * It runs again whenever a deferred or one-shot window is recreated, which is
+ * exactly when the declaration has to be repeated.
+ */
+- (void) _initBackendWindow
+{
+  [super _initBackendWindow];
+  [GSServerForWindow(self) setWindowIsMenu: YES forWindow: [self windowNumber]];
 }
 
 - (BOOL) canBecomeKeyWindow
@@ -2081,8 +2103,15 @@ static BOOL menuBarVisible = YES;
         {
           [[self window] setTitle: [[NSProcessInfo processInfo] processName]];
           [[self window] setLevel: NSMainMenuWindowLevel];
-          [self _setGeometry];
+          /* sizeToFit must run first so that [_aWindow frame].size.height
+           * is non-zero when _setGeometry uses it to place the bar at the
+           * top of the screen.  Without this ordering, external Menu.app
+           * mode (which never calls -display) leaves the window frame at
+           * {0,0,w,h} instead of the correct top-of-screen position,
+           * breaking the NSMouseInRect re-entry check in
+           * _trackWithEvent:startingMenuView: (step 3a). */
           [self sizeToFit];
+          [self _setGeometry];
 
           if ([NSApp isActive])
             {

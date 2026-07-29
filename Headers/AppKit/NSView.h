@@ -311,6 +311,10 @@ PACKAGE_SCOPE
 - (NSSize) convertSizeFromBase: (NSSize)aSize;
 - (NSSize) convertSizeToBase: (NSSize)aSize;
 #endif
+#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
+- (NSRect) backingAlignedRect: (NSRect)aRect
+                      options: (NSAlignmentOptions)options;
+#endif
 
 /*
  * Notifying Ancestor Views
@@ -374,6 +378,8 @@ PACKAGE_SCOPE
 - (void) setHidden: (BOOL)flag;
 - (BOOL) isHidden;
 - (BOOL) isHiddenOrHasHiddenAncestor;
+- (void) viewDidHide;
+- (void) viewDidUnhide;
 #endif
 
 - (void) drawRect: (NSRect)rect;
@@ -739,6 +745,25 @@ PACKAGE_SCOPE
 - (void) addConstraint: (NSLayoutConstraint *)constraint;
 
 - (void) addConstraints: (NSArray*)constraints;
+
+@end
+
+@interface NSView (NSConstraintBasedLayoutAnchors)
+
+- (NSLayoutXAxisAnchor *) leadingAnchor;
+- (NSLayoutXAxisAnchor *) trailingAnchor;
+- (NSLayoutXAxisAnchor *) leftAnchor;
+- (NSLayoutXAxisAnchor *) rightAnchor;
+- (NSLayoutXAxisAnchor *) centerXAnchor;
+
+- (NSLayoutYAxisAnchor *) topAnchor;
+- (NSLayoutYAxisAnchor *) bottomAnchor;
+- (NSLayoutYAxisAnchor *) centerYAnchor;
+- (NSLayoutYAxisAnchor *) firstBaselineAnchor;
+- (NSLayoutYAxisAnchor *) lastBaselineAnchor;
+
+- (NSLayoutDimension *) widthAnchor;
+- (NSLayoutDimension *) heightAnchor;
 
 @end
 #endif

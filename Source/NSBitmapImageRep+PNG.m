@@ -100,7 +100,9 @@ static void reader_func(png_structp png_struct, png_bytep data,
 
   int width,height;
   unsigned char *buf = NULL;
+  png_bytep *row_ptrs = NULL;
   int bytes_per_row;
+  size_t imageSize = 0;
   int type,channels,depth;
 
   BOOL alpha;
@@ -140,6 +142,10 @@ static void reader_func(png_structp png_struct, png_bytep data,
     {
       // We get here when an error happens during image loading
       png_destroy_read_struct(&png_struct, &png_info, &png_end_info);
+      if (row_ptrs != NULL)
+        {
+          NSZoneFree([self zone], row_ptrs);
+        }
       if (buf != NULL)
         {
           NSZoneFree([self zone], buf);
@@ -215,18 +221,48 @@ static void reader_func(png_structp png_struct, png_bytep data,
 	return nil;
     }
 
-  buf = NSZoneMalloc([self zone], bytes_per_row * height);
-
   {
-    png_bytep row_pointers[height];
+    /* width, height and bytes_per_row are taken from the untrusted PNG
+       header.  The buffer size was computed in int, so a large image wrapped
+       to a small or negative value, undersizing the allocation; guard the
+       arithmetic and the allocation before using them.  row_ptrs is also
+       allocated on the heap rather than as a stack VLA sized by the header. */
     int i;
+
+    imageSize = (size_t)bytes_per_row * (size_t)height;
+    if (width <= 0 || height <= 0 || bytes_per_row <= 0
+        || imageSize / (size_t)height != (size_t)bytes_per_row)
+      {
+        png_destroy_read_struct(&png_struct, &png_info, &png_end_info);
+        RELEASE(self);
+        return nil;
+      }
+
+    buf = NSZoneMalloc([self zone], imageSize);
+    row_ptrs = NSZoneMalloc([self zone], sizeof(png_bytep) * (size_t)height);
+    if (buf == NULL || row_ptrs == NULL)
+      {
+        if (row_ptrs != NULL)
+	  {
+            NSZoneFree([self zone], row_ptrs);
+	  }
+        if (buf != NULL)
+          {
+            NSZoneFree([self zone], buf);
+            buf = NULL;
+          }
+        png_destroy_read_struct(&png_struct, &png_info, &png_end_info);
+        RELEASE(self);
+        return nil;
+      }
 
     for (i = 0; i < height; i++)
       {
-        row_pointers[i] = buf + i * bytes_per_row;
+        row_ptrs[i] = buf + (size_t)i * (size_t)bytes_per_row;
       }
 
-    png_read_image(png_struct, row_pointers);
+    png_read_image(png_struct, row_ptrs);
+    NSZoneFree([self zone], row_ptrs);
   }
 
   if (depth == 16)
@@ -252,7 +288,7 @@ static void reader_func(png_structp png_struct, png_bytep data,
   
   _imageData = [[NSData alloc]
     initWithBytesNoCopy: buf
-		 length: bytes_per_row * height];
+		 length: imageSize];
 
   if (png_get_valid(png_struct, png_info, PNG_INFO_gAMA))
   {
@@ -417,11 +453,11 @@ static void writer_func(png_structp png_struct, png_bytep data,
   // write PNG out to NSMutableData
   bitmapData = [self bitmapData];
   {
-    unsigned char *row_pointers[height];
+    unsigned char *row_ptrs[height];
     int i;
     for (i = 0 ; i < height ; i++)
-      row_pointers[i] = bitmapData + i * bytes_per_row;
-    png_set_rows(png_struct, png_info, row_pointers);
+      row_ptrs[i] = bitmapData + i * bytes_per_row;
+    png_set_rows(png_struct, png_info, row_ptrs);
 
     png_write_png(png_struct, png_info, transforms, NULL);
   }

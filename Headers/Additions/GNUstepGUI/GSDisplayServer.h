@@ -160,6 +160,7 @@ APPKIT_EXPORT_CLASS
 - (NSArray *) windowlist;
 - (int) windowdepth: (int)win;
 - (CGFloat) windowScaleFactor: (int)win;
+- (void) setWindowIsMenu: (BOOL)flag forWindow: (int)win;
 - (void) setmaxsize: (NSSize)size : (int)win;
 - (void) setminsize: (NSSize)size : (int)win;
 - (void) setresizeincrements: (NSSize)size : (int)win;
