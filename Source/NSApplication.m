@@ -2183,6 +2183,20 @@ See -runModalForWindow:
 	  else
 	    NSDebugLLog(@"NSEvent", @"Send NSEvent type: %@ to %@", 
 			theEvent, window);
+	  /* InSTEP D-020 / ADR-0020: a menu closes as soon as the user clicks
+	     anywhere outside it. A click inside the open chain is left alone,
+	     because -[NSMenuView trackWithEvent:] owns that case and runs its
+	     own event loop rather than coming back through here. Off unless
+	     the InSTEPMenuDismissal default is set: NeXTSTEP keeps its menus
+	     on screen until the user switches application. */
+	  if ((type == NSLeftMouseDown || type == NSRightMouseDown
+	       || type == NSOtherMouseDown)
+	      && _main_menu != nil
+	      && [NSMenu _instepDismissesMenusOnUse]
+	      && [_main_menu _instepChainContainsWindow: window] == NO)
+	    {
+	      [_main_menu _instepDismissOpenMenus];
+	    }
 	  if (window)
 	    [window sendEvent: theEvent];
 	  else if (type == NSRightMouseDown)

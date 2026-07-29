@@ -830,6 +830,29 @@ APPKIT_EXPORT_CLASS
 - (BOOL) _ownedByPopUp;
 - (NSPopUpButtonCell *)_owningPopUp;
 - (void) _setOwnedByPopUp: (NSPopUpButtonCell*)popUp;
+
+/* InSTEP menu dismissal (divergence D-020, ADR-0020).
+ *
+ * NeXTSTEP menus are persistent floating windows: they disappear only when the
+ * user starts working in another application. InSTEP closes a menu as soon as
+ * the user chooses a command, or clicks anywhere outside it -- the behaviour
+ * every current desktop has. The divergence ships behind the InSTEPMenuDismissal
+ * default and is off unless that default is set, so the classic behaviour is
+ * what runs by default and on plain GNUstep.
+ */
+
+/** Returns YES when InSTEP's menu dismissal is switched on. */
++ (BOOL) _instepDismissesMenusOnUse;
+
+/** Closes every menu opened below this one's display root, deepest first.
+ *  A torn-off menu is a root and is never closed.
+ */
+- (void) _instepDismissOpenMenus;
+
+/** Returns YES when aWindow is the window of this menu or of any menu
+ *  currently open below it.
+ */
+- (BOOL) _instepChainContainsWindow: (NSWindow *)aWindow;
 @end
 #endif
 
