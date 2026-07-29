@@ -157,7 +157,11 @@
 {
   if ((self = [super initWithContent: content]) != nil)
     {
+      _selection_indexes = [[NSIndexSet alloc] init];
       [self setSelectsInsertedObjects: YES];
+      [self setAvoidsEmptySelection: YES];
+      [self setPreservesSelection: YES];
+      [self setClearsFilterPredicateOnInsertion: YES];
     }
 
   return self;
@@ -314,6 +318,10 @@
 
 - (BOOL) setSelectionIndexes: (NSIndexSet*)idx
 {
+  if (idx == nil)
+    {
+      idx = [NSIndexSet indexSet];
+    }
   if ([_selection_indexes isEqual: idx])
     {
       return NO;

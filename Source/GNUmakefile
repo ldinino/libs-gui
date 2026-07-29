@@ -18,8 +18,8 @@
 #
 #  You should have received a copy of the GNU Lesser General Public
 #  License along with this library; see the file COPYING.LIB.
-#  If not, see <http://www.gnu.org/licenses/> or write to the 
-#  Free Software Foundation, 51 Franklin Street, Fifth Floor, 
+#  If not, see <http://www.gnu.org/licenses/> or write to the
+#  Free Software Foundation, 51 Franklin Street, Fifth Floor,
 #  Boston, MA 02110-1301, USA.
 
 PACKAGE_NAME = gnustep-gui
@@ -28,6 +28,9 @@ include $(GNUSTEP_MAKEFILES)/common.make
 
 include ../Version
 include ../config.make
+
+# Interface version changes with each minor release
+libgnustep-gui_INTERFACE_VERSION=${GNUSTEP_GUI_MAJOR_VERSION}.${GNUSTEP_GUI_MINOR_VERSION}
 
 srcdir = .
 PACKAGE_NAME = gnustep-gui
@@ -97,6 +100,7 @@ NSController.m \
 NSCursor.m \
 NSCustomImageRep.m \
 NSCustomTouchBarItem.m \
+NSDiffableDataSource.m \
 NSDataAsset.m \
 NSDataLink.m \
 NSDataLinkManager.m \
@@ -107,6 +111,7 @@ NSDictionaryController.m \
 NSDockTile.m \
 NSDocument.m \
 NSDocumentController.m \
+NSDraggingItem.m \
 NSDrawer.m \
 NSEPSImageRep.m \
 NSEvent.m \
@@ -374,7 +379,15 @@ GSCSStrength.m \
 GSCSEditInfo.m \
 GSCSEditVariableManager.m \
 GSCSTableau.m \
-GSColorSliderCell.m
+GSColorSliderCell.m \
+GSFontAssetDownloader.m \
+GSFontAssetInstaller.m
+
+ifneq ($(filter yes 1,$(BUILD_MOVIE)),)
+libgnustep-gui_OBJC_FILES += GSMovieView.m
+libgnustep-gui_OBJC_FILES += GSAudioPlayer.m
+libgnustep-gui_OBJC_FILES += GSAVUtils.m
+endif
 
 # Turn off NSMenuItem warning that NSMenuItem conforms to <NSObject>,
 # but does not implement <NSObject>'s methods itself (it inherits
@@ -389,7 +402,7 @@ libgnustep-gui_HEADER_FILES_DIR = ../Headers/Additions/GNUstepGUI
 libgnustep-gui_HEADER_FILES_INSTALL_DIR = /GNUstepGUI
 
 COCOA_HEADERS = \
-Cocoa.h 
+Cocoa.h
 
 APPKIT_HEADERS = \
 AppKit.h \
@@ -453,9 +466,11 @@ NSDataLinkPanel.h \
 NSDatePicker.h \
 NSDatePickerCell.h \
 NSDictionaryController.h \
+NSDiffableDataSource.h \
 NSDockTile.h \
 NSDocument.h \
 NSDocumentController.h \
+NSDraggingItem.h \
 NSDrawer.h \
 NSEPSImageRep.h \
 NSErrors.h \
@@ -646,7 +661,7 @@ NSUserInterfaceItemSearching.h \
 NSUserInterfaceItemIdentification.h \
 NSUserInterfaceValidation.h \
 DPSOperators.h \
-PSOperators.h 
+PSOperators.h
 
 GUI_HEADERS = \
 GSVersion.h \
@@ -693,7 +708,9 @@ GSWindowDecorationView.h \
 GSXibElement.h \
 GSXibLoading.h \
 GSXibKeyedUnarchiver.h \
-GSHelpAttachment.h
+GSHelpAttachment.h \
+GSFontAssetDownloader.h \
+GSFontAssetInstaller.h
 
 libgnustep-gui_HEADER_FILES = ${GUI_HEADERS}
 

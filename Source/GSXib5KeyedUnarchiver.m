@@ -291,6 +291,7 @@ static NSArray      *XmlBoolDefaultYes  = nil;
                                            @"image", @"NSSegmentItemImage",
                                            @"editable", @"NSIsEditable",
                                            @"objectValues", @"NSPopUpListData",
+                                           @"prototypeCellViews", @"NSPrototypeCellViews",
                                            @"maxNumberOfRows", @"NSMaxNumberOfGridRows",
                                            @"maxNumberOfColumns", @"NSMaxNumberOfGridColumns",
                                            @"sortKey", @"NSKey",
@@ -3245,6 +3246,7 @@ didStartElement: (NSString*)elementName
       [runtimeAttribute setValue: visibleAtLaunch];
 
       [_flattenedProperties setElement: runtimeAttribute forKey: refID];
+      RELEASE(runtimeAttribute);
     }
 
   return object;

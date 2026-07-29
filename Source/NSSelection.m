@@ -198,13 +198,18 @@ typedef enum
   return _isWellKnownSelection;
 }
 
-//
-// Writing a Selection to the Pasteboard
-//
 - (void)writeToPasteboard:(NSPasteboard *)pasteboard
 {
-  [pasteboard setData: _descriptionData
-	      forType: NSGeneralPboardType];
+  [pasteboard setData: _descriptionData forType: NSGeneralPboardType];
+}
+
+- (BOOL)isEqual:(id)object
+{
+  if (self == object)
+    return YES;
+  if (![object isKindOfClass: [NSSelection class]])
+    return NO;
+  return [_descriptionData isEqual: [object descriptionData]];
 }
 
 //
@@ -216,7 +221,7 @@ typedef enum
     {
       [aCoder encodeBool: _isWellKnownSelection
 	      forKey: @"GSIsWellKnownSelection"];
-      [aCoder encodeBool: _selectionType
+      [aCoder encodeInt: _selectionType
 	      forKey: @"GSSelectionType"];
       [aCoder encodeObject: _descriptionData
 	      forKey: @"GSDescriptionData"];
@@ -228,29 +233,32 @@ typedef enum
       [aCoder encodeValueOfObjCType: @encode(int)
 	      at: &_selectionType];
       [aCoder encodeValueOfObjCType: @encode(id)
-	      at: _descriptionData];
+	      at: &_descriptionData];
     }
 }
 
 - (id) initWithCoder: (NSCoder*)aDecoder
 {
-  [super init];
+  if (nil == (self = [super init]))
+    {
+      return self;
+    }
   if ([aDecoder allowsKeyedCoding])
     {
-      _isWellKnownSelection = [aDecoder decodeBoolForKey: @"GSIsWellKnownSelection"];
+      _isWellKnownSelection
+	= [aDecoder decodeBoolForKey: @"GSIsWellKnownSelection"];
       _selectionType = [aDecoder decodeIntForKey: @"GSSelectionType"];
-      ASSIGN(_descriptionData, [aDecoder decodeObjectForKey: @"GSDescriptionData"]);
+      ASSIGN(_descriptionData,
+	[aDecoder decodeObjectForKey: @"GSDescriptionData"]);
     }
   else
     {
-      id obj;
       [aDecoder decodeValueOfObjCType: @encode(BOOL)
 		at: &_isWellKnownSelection];
       [aDecoder decodeValueOfObjCType: @encode(int)
 		at: &_selectionType];
       [aDecoder decodeValueOfObjCType: @encode(id)
-		at: &obj];
-      ASSIGN(_descriptionData, obj);
+		at: &_descriptionData];
     }
 
   // if it's a well known selection then determine which one it is.

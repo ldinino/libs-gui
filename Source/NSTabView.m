@@ -78,7 +78,10 @@
       ASSIGN(_items, [NSMutableArray array]);
       ASSIGN(_font, [NSFont systemFontOfSize: 0]);
       _selected = nil;
-      //_truncated_label = NO;
+      _draws_background = YES;
+      _truncated_label = YES;
+      _controlSize = NSRegularControlSize;
+      _controlTint = NSDefaultControlTint;
     }
 
   return self;
@@ -482,30 +485,22 @@
 
 - (NSControlSize) controlSize
 {
-  // FIXME
-  return NSRegularControlSize;
+  return _controlSize;
 }
 
-/**
- * Not implemented.
- */
 - (void) setControlSize: (NSControlSize)controlSize
 {
-  // FIXME 
+  _controlSize = controlSize;
 }
 
 - (NSControlTint) controlTint
 {
-  // FIXME
-  return NSDefaultControlTint;
+  return _controlTint;
 }
 
-/**
- * Not implemented.
- */
 - (void) setControlTint: (NSControlTint)controlTint
 {
-  // FIXME 
+  _controlTint = controlTint;
 }
 
 // Coding.

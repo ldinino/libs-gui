@@ -71,9 +71,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef __WIN32__
+#if defined(HAVE_UNISTD_H)
 #include <unistd.h>		/* for L_SET, etc definitions */
-#endif /* !__WIN32__ */
+#endif /* HAVE_UNISTD_H */
 
 #if !defined(TIFF_VERSION_CLASSIC)
 // This only got added in version 4 of libtiff, but TIFFLIB_VERSION is unusable to differentiate here
@@ -202,7 +202,8 @@ TiffHandleUnmap(thandle_t handle, void* data, toff_t size)
 TIFF* 
 NSTiffOpenDataRead(const char* data, long size)
 {
-  chandle_t* handle;
+  chandle_t	* handle;
+  TIFF		*result;
 
   if (tiff_error_handler_set == 0)
     {
@@ -218,18 +219,25 @@ NSTiffOpenDataRead(const char* data, long size)
   handle->outposition = 0;
   handle->size = size;
   handle->mode = 'r';
-  return TIFFClientOpen("GSTiffReadData", "r",
-			(thandle_t)handle,
-			TiffHandleRead, TiffHandleWrite,
-			TiffHandleSeek, TiffHandleClose,
-			TiffHandleSize,
-			TiffHandleMap, TiffHandleUnmap);
+  result = TIFFClientOpen("GSTiffReadData", "r",
+    (thandle_t)handle,
+    TiffHandleRead, TiffHandleWrite,
+    TiffHandleSeek, TiffHandleClose,
+    TiffHandleSize,
+    TiffHandleMap, TiffHandleUnmap);
+  if (NULL == result)
+    {
+      free(handle);
+    }
+  return result;
 }
 
 TIFF* 
 NSTiffOpenDataWrite(char **data, long *size)
 {
-  chandle_t* handle;
+  chandle_t	*handle;
+  TIFF		*result;
+
   handle = malloc(sizeof(chandle_t));
   handle->data = *data;
   handle->outdata = data;
@@ -237,12 +245,17 @@ NSTiffOpenDataWrite(char **data, long *size)
   handle->outposition = size;
   handle->size = *size;
   handle->mode = 'w';
-  return TIFFClientOpen("GSTiffWriteData", "w",
-			(thandle_t)handle,
-			TiffHandleRead, TiffHandleWrite,
-			TiffHandleSeek, TiffHandleClose,
-			TiffHandleSize,
-			TiffHandleMap, TiffHandleUnmap);
+  result = TIFFClientOpen("GSTiffWriteData", "w",
+    (thandle_t)handle,
+    TiffHandleRead, TiffHandleWrite,
+    TiffHandleSeek, TiffHandleClose,
+    TiffHandleSize,
+    TiffHandleMap, TiffHandleUnmap);
+  if (NULL == result)
+    {
+      free(handle);
+    }
+  return result;
 }
 
 int  

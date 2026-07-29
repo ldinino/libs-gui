@@ -52,7 +52,7 @@
             _alignment = NSCenterTextAlignment;
             break;
           case NSDecimalTabStopType:
-            _alignment = NSRightTextAlignment;
+            _alignment = NSNaturalTextAlignment;
             break;
         }
     }
@@ -72,14 +72,7 @@
 	type = NSLeftTabStopType; 
 	break;
       case NSRightTextAlignment:
-	if ([options objectForKey: NSTabColumnTerminatorsAttributeName] != nil)
-	  {
-	    type = NSDecimalTabStopType;
-	  }
-	else
-	  {
-	    type = NSRightTabStopType;
-	  }
+	type = NSRightTabStopType;
 	break;
       case NSCenterTextAlignment:
 	type = NSCenterTabStopType;
@@ -303,6 +296,8 @@ static NSParagraphStyle	*defaultStyle = nil;
           [_tabStops addObject: tab];
           RELEASE(tab);
         }
+      
+      ASSIGN(_textLists, [NSArray array]);
     }
   return self;
 }
@@ -473,9 +468,11 @@ static NSParagraphStyle	*defaultStyle = nil;
 {
   if ([aCoder allowsKeyedCoding])
     {
-      _firstLineHeadIndent = [aCoder decodeFloatForKey: @"NSFirstLineHeadIndent"];
+      _firstLineHeadIndent
+	= [aCoder decodeFloatForKey: @"NSFirstLineHeadIndent"];
       _headIndent = [aCoder decodeFloatForKey: @"NSHeadIndent"];
-      _paragraphSpacing = [aCoder decodeFloatForKey: @"NSParagraphSpacingBefore"];
+      _paragraphSpacing
+	= [aCoder decodeFloatForKey: @"NSParagraphSpacingBefore"];
       ASSIGN(_tabStops, [aCoder decodeObjectForKey: @"NSTabStops"]);
       ASSIGN(_textLists, [aCoder decodeObjectForKey: @"NSTextLists"]);
       _baseDirection = [aCoder decodeIntForKey: @"NSWritingDirection"];
@@ -494,46 +491,69 @@ static NSParagraphStyle	*defaultStyle = nil;
       [aCoder decodeValueOfObjCType: @encode(float) at: &_paragraphSpacing];
       [aCoder decodeValueOfObjCType: @encode(float) at: &_tailIndent];
       
+      // Text lists were not included for non-keyed encoding, use a default
+      ASSIGN(_textLists, [NSArray array]);
+      
       /*
        *	Tab stops don't conform to NSCoding - so we do it the long way.
        */
       [aCoder decodeValueOfObjCType: @encode(NSUInteger) at: &count];
+      /* count is read from the (untrusted) archive; could be bad!
+       */
+      if (count > 10000)
+	{
+	  RELEASE(self);
+	  [NSException raise: NSInternalInconsistencyException
+	    format: @"archive contains unreasonable number (%"PRIdPTR
+	    @") of tab stops", count];
+	}
       _tabStops = [[NSMutableArray alloc] initWithCapacity: count];
       if (count > 0)
         {
-          float locations[count];
-          NSTextTabType types[count];
+          float		*locations;
+          NSTextTabType *types;
           NSUInteger i;
-          
+
+          locations = malloc(count * sizeof(float));
+          types = malloc(count * sizeof(NSTextTabType));
+	  if (NULL == types || NULL == locations)
+	    {
+	      if (types)
+		{
+		  free(types);
+		}
+	      if (locations)
+		{
+		  free(locations);
+		}
+	      RELEASE(self);
+	      [NSException raise: NSInternalInconsistencyException
+		format: @"not enough memory to decode (%"PRIdPTR
+		@") tab stops", count];
+	    }
           [aCoder decodeArrayOfObjCType: @encode(float)
                   count: count
                   at: locations];
-          if ([aCoder versionForClassName: @"NSParagraphStyle"] >= 3)
-            {
-              [aCoder decodeArrayOfObjCType: @encode(NSInteger)
-                  count: count
-                  at: types];
-	    }
-	  else
-            {
-              [aCoder decodeArrayOfObjCType: @encode(int)
-                  count: count
-                  at: types];
-	    }
+	  [aCoder decodeArrayOfObjCType: @encode(NSTextTabType)
+	      count: count
+	      at: types];
           for (i = 0; i < count; i++)
             {
               NSTextTab	*tab;
-              
-              tab = [[NSTextTab alloc] initWithType: types[i] 
+
+              tab = [[NSTextTab alloc] initWithType: types[i]
                                        location: locations[i]];
               [_tabStops addObject: tab];
               RELEASE(tab);
             }
+          free(locations);
+          free(types);
         }
       
       if ([aCoder versionForClassName: @"NSParagraphStyle"] >= 2)
         {
-          [aCoder decodeValueOfObjCType: @encode(NSInteger) at: &_baseDirection];
+          [aCoder decodeValueOfObjCType: @encode(NSInteger)
+				     at: &_baseDirection];
         }
     }
 
@@ -586,7 +606,7 @@ static NSParagraphStyle	*defaultStyle = nil;
           [aCoder encodeArrayOfObjCType: @encode(float)
                   count: count
                   at: locations];
-          [aCoder encodeArrayOfObjCType: @encode(NSInteger)
+          [aCoder encodeArrayOfObjCType: @encode(NSTextTabType)
                   count: count
                   at: types];
         }
@@ -621,7 +641,12 @@ static NSParagraphStyle	*defaultStyle = nil;
   C(_headerLevel);
 #undef C
 
-  return [_tabStops isEqualToArray: other->_tabStops];
+#define C(x) if (![x isEqualToArray: other->x]) return NO;
+  C(_tabStops);
+  C(_textLists);
+#undef C
+
+  return YES;
 }
 
 - (NSUInteger) hash
@@ -789,7 +814,6 @@ static NSParagraphStyle	*defaultStyle = nil;
     {
       [_tabStops removeAllObjects];
       [_tabStops addObjectsFromArray: array];
-      [_tabStops sortUsingSelector: @selector(compare:)];
     }
 }
 

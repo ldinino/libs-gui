@@ -85,6 +85,7 @@
 #import <AppKit/NSDataLinkManager.h>
 #import <AppKit/NSDataLinkPanel.h>
 #import <AppKit/NSDragging.h>
+#import <AppKit/NSDraggingItem.h>
 #import <AppKit/NSEPSImageRep.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSFont.h>
@@ -169,6 +170,7 @@
 #import <AppKit/NSDocument.h>
 #import <AppKit/NSDocumentController.h>
 #import <AppKit/NSDictionaryController.h>
+#import <AppKit/NSDiffableDataSource.h>
 #import <AppKit/NSDrawer.h>
 #import <AppKit/NSFileWrapperExtensions.h>
 #import <AppKit/NSFontAssetRequest.h>

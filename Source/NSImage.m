@@ -46,6 +46,7 @@
 #import "AppKit/NSAffineTransform.h"
 #import "AppKit/NSBitmapImageRep.h"
 #import "AppKit/NSCachedImageRep.h"
+#import "AppKit/NSCustomImageRep.h"
 #import "AppKit/NSColor.h"
 #import "AppKit/NSPasteboard.h"
 #import "AppKit/NSPrintOperation.h"
@@ -386,6 +387,7 @@ static NSMutableDictionary	*nameDict = nil;
 static NSColor			*clearColor = nil;
 static Class cachedClass = 0;
 static Class bitmapClass = 0;
+static Class customClass = 0;
 // Cache for the supported file types
 static NSArray *imageUnfilteredFileTypes = nil;
 static NSArray *imageFileTypes = nil;
@@ -451,6 +453,7 @@ repd_for_rep(NSArray *_reps, NSImageRep *rep)
       clearColor = RETAIN([NSColor clearColor]);
       cachedClass = [NSCachedImageRep class];
       bitmapClass = [NSBitmapImageRep class];
+      customClass = [NSCustomImageRep class];
       [[NSNotificationCenter defaultCenter]
 	addObserver: self
 	   selector: @selector(_clearFileTypeCaches:)
@@ -1166,11 +1169,16 @@ repd_for_rep(NSArray *_reps, NSImageRep *rep)
 
   // Try to cache / get a cached version of the best rep
   
-  /** 
+  /**
    * We only use caching on backends that can efficiently draw a rect from the cache
    * onto the current graphics context respecting the CTM, which is currently cairo.
+   *
+   * Custom image reps draw through a delegate and can produce different output
+   * on each draw, so they must not be cached; a cache would freeze their first
+   * drawing.
    */
   if (_cacheMode != NSImageCacheNever &&
+      ![rep isKindOfClass: customClass] &&
       [ctxt supportsDrawGState])
     {
       NSCachedImageRep *cache = [self _doImageCache: rep];
@@ -2224,9 +2232,8 @@ iterate_reps_for_types(NSArray* imageReps, SEL method)
 }
 
 /**
- * For all NSImage instances cached in nameDict, recompute the
- * path using +_pathForImageNamed: and if it has changed,
- * reload the image contents using the new path.
+ * For all NSImage instances cached in nameDict, recompute the path using
+ * +_pathForImageNamed: and reload the image contents using the new path.
  */
 + (void) _reloadCachedImages
 {
@@ -2241,7 +2248,7 @@ iterate_reps_for_types(NSArray* imageReps, SEL method)
 
       //NSLog(@"Loaded image %@ from %@", name, path);
 
-      if (path != nil && ![path isEqual: image->_fileName])
+      if (path != nil)
 	{
 	  /* Reset the existing image to use the contents of
 	   * the specified file.

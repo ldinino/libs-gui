@@ -904,8 +904,8 @@ static BOOL _isAutolaunchChecked = NO;
   /* Initialize font manager.  */
   [NSFontManager sharedFontManager];
 
-  _hidden = [[NSMutableArray alloc] init];
-  _inactive = [[NSMutableArray alloc] init];
+  ASSIGN(_hidden, [NSMutableArray array]);
+  ASSIGN(_inactive, [NSMutableArray array]);
   _unhide_on_activation = YES;
   _app_is_hidden = NO;
   /* Ivar already automatically initialized to NO when the app is
@@ -979,7 +979,12 @@ static BOOL _isAutolaunchChecked = NO;
    * initialization code behaves always in the same way for this class
    * and for subclasses.
    */
-  NSAssert (NSApp == nil, _(@"[NSApplication -init] called more than once"));
+  if (NSApp != nil)
+    {
+      RELEASE(self);
+      [NSException raise: NSInternalInconsistencyException
+  		  format: _(@"[NSApplication -init] called more than once")];
+    }
 
   /*
    * The appkit should run in the main thread ... so to be sure we perform
@@ -1135,14 +1140,32 @@ static BOOL _isAutolaunchChecked = NO;
     {
       [_listener application: self openFiles: files];
     } 
-  else if ((filePath = [defs stringForKey: @"GSFilePath"]) != nil
-    || (filePath = [defs stringForKey: @"NSOpen"]) != nil)
+  else if ((filePath = [defs stringForKey: @"GSFilePath"]) != nil)
     {
       [_listener application: self openFile: filePath];
+    }
+  else if ((filePath = [defs stringForKey: @"GSOpenURL"]) != nil)
+    {
+      NSURL	*u = [NSURL URLWithString: filePath];
+
+      [_listener application: self openURL: u];
     }
   else if ((filePath = [defs stringForKey: @"GSTempPath"]) != nil)
     {
       [_listener application: self openTempFile: filePath];
+    }
+  else if ((filePath = [defs stringForKey: @"NSOpen"]) != nil)
+    {
+      NSURL	*u = [NSURL URLWithString: filePath];
+
+      if ([[u scheme] length] > 0)
+	{
+	  [_listener application: self openURL: u];
+	}
+      else
+	{
+          [_listener application: self openFile: filePath];
+	}
     }
   else if ((filePath = [defs stringForKey: @"NSPrint"]) != nil)
     {
@@ -1214,48 +1237,60 @@ static BOOL _isAutolaunchChecked = NO;
 
 - (void) dealloc
 {
-  GSDisplayServer *srv = GSServerForWindow(_app_icon_window);
+  DESTROY(_hidden);
+  DESTROY(_inactive);
 
-  if (srv == nil)
+  /* The display server is notionally owned by the NSApplication singleton
+   * so if (and only if) this is that object, we should shut it down.
+   * We destroy additional app instnces st the start of the -init process,
+   * so nothing should have been created that actually needs to be handled
+   * here.
+   */
+  if (self == NSApp)
     {
-      srv = GSCurrentServer();
+      GSDisplayServer *srv;
+
+      [[[NSWorkspace sharedWorkspace] notificationCenter]
+	removeObserver: self];
+      [nc removeObserver: self];
+
+      RELEASE(_listener);
+      RELEASE(null_event);
+      RELEASE(_current_event);
+
+      /* We may need to tidy up nested modal session structures. */
+      while (_session != 0)
+	{
+	  NSModalSession tmp = _session;
+
+	  _session = tmp->previous;
+	  NSZoneFree(NSDefaultMallocZone(), tmp);
+	}
+
+      /* Release the menus, then set them to nil so we don't try updating
+	 them after they have been deallocated.  */
+      DESTROY(_main_menu);
+      DESTROY(_windows_menu);
+
+      TEST_RELEASE(_app_icon);
+      TEST_RELEASE(_app_icon_window);
+      TEST_RELEASE(_dock_tile);
+      TEST_RELEASE(_infoPanel);
+
+      /* Destroy the default context */
+      [NSGraphicsContext setCurrentContext: nil];
+      DESTROY(_default_context);
+
+      /* Close the server */
+      srv = GSServerForWindow(_app_icon_window);
+      if (srv == nil)
+	{
+	  srv = GSCurrentServer();
+	}
+      [srv closeServer];
+      DESTROY(srv);
+      NSApp = nil;
     }
-  [[[NSWorkspace sharedWorkspace] notificationCenter]
-    removeObserver: self];
-  [nc removeObserver: self];
-
-  RELEASE(_hidden);
-  RELEASE(_inactive);
-  RELEASE(_listener);
-  RELEASE(null_event);
-  RELEASE(_current_event);
-
-  /* We may need to tidy up nested modal session structures. */
-  while (_session != 0)
-    {
-      NSModalSession tmp = _session;
-
-      _session = tmp->previous;
-      NSZoneFree(NSDefaultMallocZone(), tmp);
-    }
-
-  /* Release the menus, then set them to nil so we don't try updating
-     them after they have been deallocated.  */
-  DESTROY(_main_menu);
-  DESTROY(_windows_menu);
-
-  TEST_RELEASE(_app_icon);
-  TEST_RELEASE(_app_icon_window);
-  TEST_RELEASE(_dock_tile);
-  TEST_RELEASE(_infoPanel);
-
-  /* Destroy the default context */
-  [NSGraphicsContext setCurrentContext: nil];
-  DESTROY(_default_context);
-
-  /* Close the server */
-  [srv closeServer];
-  DESTROY(srv);
 
   [super dealloc];
 }
@@ -2406,6 +2441,26 @@ image.</p><p>See Also: -applicationIconImage</p>
   // Use a copy as we change the name and size
   ASSIGNCOPY(_app_icon, anImage);
 
+  /* -[NSImage copyWithZone:] does not copy cached representations, so an image
+     that was only drawn into (e.g. with -lockFocus, whose sole representation
+     is a cached one) copies to an image with no representations and would draw
+     nothing. Take an independent bitmap snapshot of the original in that case
+     so the icon still draws. */
+  if ([[_app_icon representations] count] == 0)
+    {
+      NSData *tiff = [anImage TIFFRepresentation];
+
+      if (tiff != nil)
+        {
+          NSImageRep *bitmap = [NSBitmapImageRep imageRepWithData: tiff];
+
+          if (bitmap != nil)
+            {
+              [_app_icon addRepresentation: bitmap];
+            }
+        }
+    }
+
   server = GSCurrentServer();
   miniWindowSize = server != 0 ? [server iconSize] : NSZeroSize;
   if (miniWindowSize.width <= 0 || miniWindowSize.height <= 0) 
@@ -2467,6 +2522,7 @@ image.</p><p>See Also: -applicationIconImage</p>
   if (!_dock_tile)
     {
       _dock_tile = [[NSDockTile alloc] init];
+      [_dock_tile setOwner: self];
       [_dock_tile setContentView: [_app_icon_window contentView]];
     }
   return _dock_tile;
@@ -3614,6 +3670,11 @@ struct _DelegateWrapper
 
         DESTROY(pool);
       }
+
+      /* exit() does not unwind the stack, so objects still held by pools
+         created outside this method would otherwise be deallocated from an
+         atexit handler, after parts of the runtime have been torn down.  */
+      [[NSAutoreleasePool currentPool] emptyPool];
 
       /* And finally, stop the program.  */
       exit(0);
