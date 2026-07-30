@@ -1555,17 +1555,27 @@ static float menuBarHeight = 0.0;
   // Ignore the first mouse up if menu is horizontal.
   if ([self isHorizontal] == YES ||
       // Or if menu is transient and style is NSWindows95InterfaceStyle.
-      ([[self menu] isTransient] && style == NSWindows95InterfaceStyle) ||
+      ([[self menu] isTransient] && (style == NSWindows95InterfaceStyle ||
+				     style == NSNextStepInterfaceStyle)) ||
       /* Or to mimic Mac OS X behavior for pop up menus. If the user
 	 presses the mouse button over a pop up button and then drags the mouse
 	 over the menu, the menu is closed when the user releases the mouse. On
 	 the other hand, when the user clicks on the button and then moves the
 	 mouse the menu is closed upon the next mouse click. */
       ([[self menu] _ownedByPopUp] && (style == NSMacintoshInterfaceStyle ||
+				       style == NSNextStepInterfaceStyle ||
 				       popUpProcessEvents)))
     {
       /*
        * Ignore the first mouse up if nothing interesting has happened.
+       *
+       * NeXTSTEP is included above because its Guidelines (Menus) specify
+       * click-to-choose as normal: "This can be as simple as clicking the
+       * command".  Without it the release that ends the opening click ends
+       * tracking, so a context menu or pop-up list can only be operated by
+       * holding the button down -- unusable on a trackpad.  Press-drag-release
+       * still works: moving to a different item sets shouldFinish back to YES
+       * below, so that release chooses.
        */
       shouldFinish = NO;
     }
