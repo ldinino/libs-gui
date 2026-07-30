@@ -1933,22 +1933,28 @@ static BOOL menuBarVisible = YES;
 	 center of the menu's title view is placed below the mouse cursor.
 	 However, in Macintosh and Windows95 styles, menus have no visible
 	 title. To prevent the user from accidentally selecting the first
-	 item, the top left edge is placed below the mouse cursor for them. */
+	 item, the top left edge is placed below the mouse cursor for them.
+
+	 A display server that constrains popup placement is excluded as
+	 well. It cannot report absolute window positions, so the origin
+	 computed here is not a screen coordinate at all: it is the anchor
+	 point the server places the menu from, and the server flips or
+	 slides the menu about that anchor when an edge is near. Centring
+	 moves the anchor half a menu width off the pointer, so at the
+	 right-hand edge of the screen the flip leaves the whole menu beside
+	 the cursor instead of under it. Left alone, the origin puts a
+	 corner of the menu on the cursor's own pixel and the menu fans away
+	 from whichever edges are near -- diagonally in a corner. Such a
+	 server keeps the menu on screen itself, so the clamp below would
+	 only drag it away from the pointer. */
       style = NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", nil);
       if (style != NSWindows95InterfaceStyle &&
-	  style != NSMacintoshInterfaceStyle)
+	  style != NSMacintoshInterfaceStyle &&
+	  ![GSCurrentServer() serverConstrainsPopupPlacement])
 	{
 	  location.x -= frame.size.width/2;
-	  /* Keep the menu clear of the left edge of the screen -- but only
-	     where the origin computed above really is a screen coordinate.
-	     A display server that cannot report absolute window positions
-	     fabricates a coordinate space per window, so zero is not the
-	     left edge of anything there, and forcing the origin up to it
-	     drags the menu away from the pointer by however far that
-	     window's fabricated origin happens to be from zero. Such a
-	     server keeps the menu on screen itself. */
-	  if (location.x < 0
-	      && ![GSCurrentServer() serverConstrainsPopupPlacement])
+	  /* Keep the menu clear of the left edge of the screen. */
+	  if (location.x < 0)
 	    location.x = 0;
 	  location.y += 10;
 	}
