@@ -853,6 +853,20 @@ APPKIT_EXPORT_CLASS
  *  currently open below it.
  */
 - (BOOL) _instepChainContainsWindow: (NSWindow *)aWindow;
+
+/* InSTEP submenu hover grace (divergence D-023, ADR-0023).
+ *
+ * A submenu opens the instant the pointer enters the row that owns it, and the
+ * open submenu is torn down the instant the pointer enters any other row.
+ * Reaching a submenu necessarily crosses rows that are not its owner, so that
+ * combination demands perfectly horizontal travel. InSTEP adds a short hover
+ * delay before a newly hovered row replaces the open submenu, and a safe
+ * triangle between the pointer and the near edge of that submenu, both behind
+ * the InSTEPMenuHoverGrace default and off unless it is set.
+ */
+
+/** Returns YES when InSTEP's submenu hover grace is switched on. */
++ (BOOL) _instepMenuHoverGrace;
 @end
 #endif
 

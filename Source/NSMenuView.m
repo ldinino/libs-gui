@@ -1454,6 +1454,47 @@ static float menuBarHeight = 0.0;
 #define MOVE_THRESHOLD_DELTA 2.0
 #define DELAY_MULTIPLIER     10
 
+/* InSTEP divergence D-023 / ADR-0023. Starting values, not measured optima:
+   below ~150ms the delay stops protecting anything, and Windows' ~400ms reads
+   sluggish. The second is a STALL timeout, not a lifetime: the wedge below
+   dies when the pointer stops closing on the submenu, which is the ADR's
+   "until the pointer moves away from the submenu, whichever comes first". Read
+   as an absolute lifetime it would abandon a slow but deliberate approach
+   after 300ms, which is the case the wedge exists for. */
+#define INSTEP_HOVER_DELAY       0.25
+#define INSTEP_TRIANGLE_STALL    0.30
+
+/* InSTEP D-023: is `point` inside the wedge whose apex is where the pointer
+   last was on the row owning the open submenu, and whose base is the near
+   vertical edge of `target`, the submenu's frame? Everything is in screen
+   coordinates. Travel inside that wedge is travel toward the submenu, even
+   though it crosses rows that do not own it. *progress reports how far the
+   pointer has closed on that edge, which is what tells a steady approach apart
+   from a stall. */
+static BOOL
+_instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
+                      CGFloat *progress)
+{
+  BOOL rightwards = (apex.x <= NSMinX(target));
+  CGFloat edge = rightwards ? NSMinX(target) : NSMaxX(target);
+  NSPoint low = NSMakePoint(edge, NSMinY(target));
+  NSPoint high = NSMakePoint(edge, NSMaxY(target));
+  CGFloat d1, d2, d3;
+
+  *progress = rightwards ? (point.x - apex.x) : (apex.x - point.x);
+
+  d1 = (point.x - low.x) * (apex.y - low.y)
+     - (apex.x - low.x) * (point.y - low.y);
+  d2 = (point.x - high.x) * (low.y - high.y)
+     - (low.x - high.x) * (point.y - high.y);
+  d3 = (point.x - apex.x) * (high.y - apex.y)
+     - (high.x - apex.x) * (point.y - apex.y);
+
+  /* Inside iff the point is on the same side of all three edges. */
+  return !(((d1 < 0) || (d2 < 0) || (d3 < 0))
+           && ((d1 > 0) || (d2 > 0) || (d3 > 0)));
+}
+
 - (BOOL) _executeItemAtIndex: (int)indexOfActionToExecute
 	       removeSubmenu: (BOOL)subMenusNeedRemoving
 {
@@ -1502,6 +1543,21 @@ static float menuBarHeight = 0.0;
   int delayCount = 0;
   int indexOfActionToExecute = -1;
   int firstIndex = -1;
+  /* InSTEP D-023. graceIndex/graceSince time how long the pointer has rested
+     where it is; graceApex is the safe triangle's apex, refreshed while the
+     pointer is still on the row that owns the open submenu and killed once it
+     stops heading for it. There is no timer: the loop below is driven by
+     NSPeriodic every 10ms, so nothing can outlive the menu that scheduled
+     it. */
+  BOOL hoverGrace = [NSMenu _instepMenuHoverGrace];
+  BOOL holdSubmenu = NO;
+  int graceOwner = -1;
+  int graceIndex = -2;
+  NSTimeInterval graceSince = 0.0;
+  NSTimeInterval graceApexTime = 0.0;
+  CGFloat graceProgress = 0.0;
+  NSPoint graceApex = NSZeroPoint;
+  BOOL graceApexValid = NO;
   NSInterfaceStyle style =
     NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", self);
   NSEvent *original;
@@ -1780,19 +1836,97 @@ static float menuBarHeight = 0.0;
 		}
             }
 
-          // 4 - We changed the selected item and should update.
-          if (!justAttachedNewSubmenu && index != _highlightedItemIndex)
+          /* InSTEP D-023: decide whether the open submenu still owns the
+             pointer before section 4 is allowed to replace it. The owning row
+             is *derived*, never remembered: this loop is re-entered by
+             recursion from sections 3a and 3b, and a remembered index would be
+             lost exactly when the pointer comes back out of a submenu. */
+          holdSubmenu = NO;
+          graceOwner = -1;
+          if (hoverGrace)
             {
-              subMenusNeedRemoving = NO;
-              [self detachSubmenu];
-              [self setHighlightedItemIndex: index];
+              NSMenu *openSubmenu = [self attachedMenu];
+              NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+              NSPoint onScreen = [_window convertBaseToScreen: location];
 
-              // WO: Question?  Why the ivar _items_link
-              if (index >= 0 && [[_items_link objectAtIndex: index] submenu])
+              if (openSubmenu != nil)
                 {
-                  [self attachSubmenuForItemAtIndex: index];
-                  justAttachedNewSubmenu = YES;
-                  delayCount = 0;
+                  graceOwner = (int)[_attachedMenu
+                                      indexOfItemWithSubmenu: openSubmenu];
+                }
+              if (index != graceIndex)
+                {
+                  graceIndex = index;
+                  graceSince = now;
+                }
+              if (graceOwner != -1 && index == graceOwner)
+                {
+                  /* Still on the row that owns the open submenu, so the wedge
+                     is measured from wherever the pointer leaves it. */
+                  graceApex = onScreen;
+                  graceApexTime = now;
+                  graceProgress = 0.0;
+                  graceApexValid = YES;
+                }
+              else if (graceApexValid)
+                {
+                  CGFloat progress = 0.0;
+
+                  if (openSubmenu == nil
+                      || !_instepInSafeTriangle(graceApex,
+                           [[openSubmenu window] frame], onScreen, &progress))
+                    {
+                      /* Moved away from the submenu: stop protecting it, so a
+                         stale submenu is never stranded. */
+                      graceApexValid = NO;
+                    }
+                  else if (progress > graceProgress)
+                    {
+                      /* Still closing on it, however slowly. */
+                      graceProgress = progress;
+                      graceApexTime = now;
+                    }
+                  else if (now - graceApexTime > INSTEP_TRIANGLE_STALL)
+                    {
+                      graceApexValid = NO;
+                    }
+                }
+              holdSubmenu = (graceOwner != -1 && index != graceOwner
+                             && (graceApexValid
+                                 || now - graceSince < INSTEP_HOVER_DELAY));
+            }
+
+          // 4 - We changed the selected item and should update.
+          if (!justAttachedNewSubmenu
+              && (index != _highlightedItemIndex
+                  /* InSTEP D-023: under the grace the highlight keeps
+                     following the pointer while the submenu does not, so a
+                     swap can still be owed after the highlight caught up.
+                     graceOwner is -1 unless the grace is on. */
+                  || (graceOwner != -1 && index != graceOwner)))
+            {
+              if (holdSubmenu || (graceOwner != -1 && index == graceOwner))
+                {
+                  /* Either the pointer is still on its way to the open
+                     submenu, or it came back to the row that owns it: leave
+                     that submenu alone. The highlight still moves, so a click
+                     is never delayed and never runs the wrong row. */
+                  subMenusNeedRemoving = NO;
+                  [self setHighlightedItemIndex: index];
+                }
+              else
+                {
+                  subMenusNeedRemoving = NO;
+                  [self detachSubmenu];
+                  [self setHighlightedItemIndex: index];
+
+                  // WO: Question?  Why the ivar _items_link
+                  if (index >= 0 && [[_items_link objectAtIndex: index] submenu])
+                    {
+                      [self attachSubmenuForItemAtIndex: index];
+                      justAttachedNewSubmenu = YES;
+                      delayCount = 0;
+                    }
                 }
             }
 
@@ -1846,6 +1980,25 @@ static float menuBarHeight = 0.0;
 
   // FIXME
   [NSEvent stopPeriodicEvents];
+
+  /* InSTEP D-023: no delay ever applies to a click. If the button went up
+     while a swap was still being held back, settle it now, so the release is
+     resolved against the row the pointer is on rather than against the submenu
+     the grace was protecting. */
+  if (hoverGrace && [self attachedMenu] != nil
+      && [_attachedMenu indexOfItemWithSubmenu: [self attachedMenu]]
+         != _highlightedItemIndex)
+    {
+      NSInteger settled = _highlightedItemIndex;
+
+      /* -detachSubmenu clears the highlight for a non-transient submenu. */
+      [self detachSubmenu];
+      [self setHighlightedItemIndex: settled];
+      if (settled >= 0 && [[_items_link objectAtIndex: settled] submenu])
+        {
+          [self attachSubmenuForItemAtIndex: settled];
+        }
+    }
 
   /*
    * We need to store this, because _highlightedItemIndex
