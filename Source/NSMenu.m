@@ -2315,6 +2315,25 @@ static BOOL menuBarVisible = YES;
   return NO;
 }
 
+/* InSTEP divergence D-023 / ADR-0023 -- see the declaration in NSMenu.h. */
+
++ (BOOL) _instepMenuHoverGrace
+{
+  static BOOL resolved = NO;
+  static BOOL enabled = NO;
+
+  /* Same contract as +_instepDismissesMenusOnUse above: an InSTEP* key is
+     registered with a false default, so the user default alone is the whole
+     answer, and it is resolved once. */
+  if (resolved == NO)
+    {
+      enabled = [[NSUserDefaults standardUserDefaults]
+                  boolForKey: @"InSTEPMenuHoverGrace"];
+      resolved = YES;
+    }
+  return enabled;
+}
+
 - (NSString*) description
 {
   return [NSString stringWithFormat: @"NSMenu: %@ (%@)",
