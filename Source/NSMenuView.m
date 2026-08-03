@@ -99,6 +99,9 @@ static NSMapTable *viewInfo = 0;
 
 @interface NSMenuView (Private)
 - (BOOL) _rootIsHorizontal: (BOOL*)isAppMenu;
+- (BOOL) _trackWithEvent: (NSEvent*)event
+        startingMenuView: (NSMenuView*)mainWindowMenuView
+  instepOwnsOpeningClick: (BOOL)instepOwnsOpeningClick;
 @end
 
 @implementation NSMenuView (Private)
@@ -1530,8 +1533,22 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
   return YES;
 }
 
+/* Only the invocation the public entry point makes is handed an event a user
+   has just delivered; the three recursive calls below are entered because the
+   pointer crossed a boundary, and they carry that same event object down.
+   Which invocation owns the opening click is therefore not derivable inside
+   the method, so it is passed in (§1.9.5 defect 38). */
 - (BOOL) _trackWithEvent: (NSEvent*)event
         startingMenuView: (NSMenuView*)mainWindowMenuView
+{
+  return [self _trackWithEvent: event
+              startingMenuView: mainWindowMenuView
+        instepOwnsOpeningClick: YES];
+}
+
+- (BOOL) _trackWithEvent: (NSEvent*)event
+        startingMenuView: (NSMenuView*)mainWindowMenuView
+  instepOwnsOpeningClick: (BOOL)instepOwnsOpeningClick
 {
   NSUInteger eventMask = NSPeriodicMask;
   NSDate *theDistantFuture = [NSDate distantFuture];
@@ -1612,14 +1629,16 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
   if ([self isHorizontal] == YES ||
       // Or if menu is transient and style is NSWindows95InterfaceStyle.
       ([[self menu] isTransient] && (style == NSWindows95InterfaceStyle ||
-				     style == NSNextStepInterfaceStyle)) ||
+				     (style == NSNextStepInterfaceStyle
+				      && instepOwnsOpeningClick))) ||
       /* Or to mimic Mac OS X behavior for pop up menus. If the user
 	 presses the mouse button over a pop up button and then drags the mouse
 	 over the menu, the menu is closed when the user releases the mouse. On
 	 the other hand, when the user clicks on the button and then moves the
 	 mouse the menu is closed upon the next mouse click. */
       ([[self menu] _ownedByPopUp] && (style == NSMacintoshInterfaceStyle ||
-				       style == NSNextStepInterfaceStyle ||
+				       (style == NSNextStepInterfaceStyle
+					&& instepOwnsOpeningClick) ||
 				       popUpProcessEvents)))
     {
       /*
@@ -1632,6 +1651,14 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
        * holding the button down -- unusable on a trackpad.  Press-drag-release
        * still works: moving to a different item sets shouldFinish back to YES
        * below, so that release chooses.
+       *
+       * It is gated on instepOwnsOpeningClick because there is only one
+       * opening click per gesture, and it belongs to the invocation the
+       * public entry point made.  A recursive invocation is entered because
+       * the pointer crossed into another menu, and it re-binds `original`
+       * from its parameter, so without the gate the suppression re-armed
+       * against whatever row the pointer entered on and swallowed a second
+       * release (§1.9.5 defect 38).
        */
       shouldFinish = NO;
     }
@@ -1772,7 +1799,8 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
                   
                   candidateMenuResult = [[candidateMenu menuRepresentation]
                                           _trackWithEvent: original
-                                          startingMenuView: mainWindowMenuView];
+                                          startingMenuView: mainWindowMenuView
+                                    instepOwnsOpeningClick: NO];
                   return candidateMenuResult;
                 }
 
@@ -1787,7 +1815,8 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
 
                   subMenuResult
                     = [[self attachedMenuView] _trackWithEvent: original
-                                              startingMenuView: mainWindowMenuView];
+                                              startingMenuView: mainWindowMenuView
+                                        instepOwnsOpeningClick: NO];
                   if (subMenuResult
                     && wasTransient == [_attachedMenu isTransient])
                     {
@@ -1829,7 +1858,8 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
 		              [self setHighlightedItemIndex: -1];
 		              return [mainWindowMenuView
                                        _trackWithEvent: original
-                                       startingMenuView: mainWindowMenuView];
+                                       startingMenuView: mainWindowMenuView
+                                 instepOwnsOpeningClick: NO];
                             }
 		        }
                     }
