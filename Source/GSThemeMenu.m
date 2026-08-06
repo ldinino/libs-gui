@@ -103,9 +103,31 @@
   NSMenuView *mv = [menu menuRepresentation];
   if ([mv isHorizontal] == NO)
     {
+      /* An earlier gesture may deliberately have left this menu up with a
+         submenu attached -- see below. Take that tree down before showing the
+         menu again at the new pointer position, because -displayTransient
+         refuses to run on a menu that is already transient and the second
+         right-click would otherwise produce nothing at all. */
+      if ([menu isTransient])
+        {
+          [mv detachSubmenu];
+          [menu closeTransient];
+        }
       [menu displayTransient];
       [mv mouseDown: theEvent];
-      [menu closeTransient];
+      /* InSTEP §1.9.5 defect 50: this used to close the menu whatever
+         tracking decided, so a release that ATTACHED a submenu -- which
+         -[NSMenuView _trackWithEvent:] deliberately leaves open, and which the
+         NeXTSTEP UI Guidelines call the way a submenu is attached -- took the
+         whole tree down with it. Hovering the same row never returns here at
+         all, which is exactly the asymmetry the defect reports. A submenu is
+         still attached only when tracking chose to keep it: every other exit
+         detaches before returning, so this reads "case B(ii): keep attached
+         menus" and nothing else. */
+      if ([menu attachedMenu] == nil)
+        {
+          [menu closeTransient];
+        }
     }
 }
 

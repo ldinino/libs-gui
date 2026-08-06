@@ -102,6 +102,8 @@ static NSMapTable *viewInfo = 0;
 - (BOOL) _trackWithEvent: (NSEvent*)event
         startingMenuView: (NSMenuView*)mainWindowMenuView
   instepOwnsOpeningClick: (BOOL)instepOwnsOpeningClick;
+- (BOOL) _instepReleaseAttachesSubmenuAtIndex: (int)index
+                                removeSubmenu: (BOOL)subMenusNeedRemoving;
 @end
 
 @implementation NSMenuView (Private)
@@ -1538,6 +1540,25 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
    pointer crossed a boundary, and they carry that same event object down.
    Which invocation owns the opening click is therefore not derivable inside
    the method, so it is passed in (§1.9.5 defect 38). */
+/* InSTEP §1.9.5 defects 50 and 51. Is a release over row `index` the gesture
+   that *attaches* that row's submenu rather than one that chooses a command?
+   This is deliberately the exact condition -_executeItemAtIndex:removeSubmenu:
+   answers NO to, so the two can never disagree about what the release meant. */
+- (BOOL) _instepReleaseAttachesSubmenuAtIndex: (int)index
+                                removeSubmenu: (BOOL)subMenusNeedRemoving
+{
+  NSInterfaceStyle style =
+    NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", self);
+
+  return (index >= 0
+          && subMenusNeedRemoving == NO
+          && style != NSMacintoshInterfaceStyle
+          && style != NSWindows95InterfaceStyle
+          && [_attachedMenu attachedMenu] != nil
+          && [_attachedMenu attachedMenu]
+             == [[_items_link objectAtIndex: index] submenu]);
+}
+
 - (BOOL) _trackWithEvent: (NSEvent*)event
         startingMenuView: (NSMenuView*)mainWindowMenuView
 {
@@ -1568,6 +1589,12 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
      it. */
   BOOL hoverGrace = [NSMenu _instepMenuHoverGrace];
   BOOL holdSubmenu = NO;
+  /* InSTEP: which row the LAST tracking sample found the pointer on, -1 for
+     none. _highlightedItemIndex is not a substitute: section 2 below cannot
+     clear justAttachedNewSubmenu while the pointer is outside the menu, so
+     section 4 never runs and the highlight stays on the row whose submenu
+     is open however far the pointer has since gone. */
+  int sampledIndex = -1;
   int graceOwner = -1;
   int graceIndex = -2;
   NSTimeInterval graceSince = 0.0;
@@ -1962,6 +1989,7 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
 
           // Update last seen location for the justAttachedNewSubmenu logic.
           lastLocation = location;
+          sampledIndex = index;
         }
 
       do
@@ -1980,7 +2008,24 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
     }
   while ((type != NSLeftMouseUp &&
 	  type != NSRightMouseUp &&
-	  type != NSOtherMouseUp) || shouldFinish == NO);
+	  type != NSOtherMouseUp) || shouldFinish == NO
+	 /* InSTEP §1.9.5 defect 51, under D-023's InSTEPMenuHoverGrace: a
+	    release that attaches a submenu does not end the gesture -- the
+	    menu stays on screen, so tracking stays with it. Without this an
+	    application menu has no hover-select where a context menu, whose
+	    opening release is already swallowed, does. It is keyed on the
+	    row the last tracking SAMPLE found the pointer on, and on that row
+	    still being the highlighted one: keying it on the highlight alone
+	    made the loop unstoppable, because section 2 cannot clear
+	    justAttachedNewSubmenu while the pointer is outside the menu, so
+	    section 4 never runs and the highlight never moves. Measured: the
+	    process then span at ~100% CPU after the menu was dismissed. */
+	 || (hoverGrace
+	     && ![self isHorizontal]
+	     && ![[self menu] _ownedByPopUp]
+	     && sampledIndex == _highlightedItemIndex
+	     && [self _instepReleaseAttachesSubmenuAtIndex: sampledIndex
+	                                     removeSubmenu: subMenusNeedRemoving]));
 
   /*
    * Ok, we released the mouse
@@ -2036,7 +2081,16 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
    */
   indexOfActionToExecute = _highlightedItemIndex;
 
+  /* InSTEP §1.9.5 defect 50, unflagged. Case B(ii) above says "Keep attached
+     menus", but the teardown below removes a *transient* menu unconditionally
+     and a context menu is transient, so clicking a row that owns a submenu
+     took the whole tree down while hovering the same row -- which never
+     reaches this code -- worked. Clicking a submenu's controlling command is
+     how that submenu is attached (NeXTSTEP UI Guidelines), which is the same
+     reason -_executeItemAtIndex:removeSubmenu: answers NO below. */
   // remove transient menus. --------------------------------------------
+  if (![self _instepReleaseAttachesSubmenuAtIndex: indexOfActionToExecute
+                                    removeSubmenu: subMenusNeedRemoving])
   {
     NSMenu *currentMenu = _attachedMenu;
     
