@@ -139,6 +139,10 @@ static NSString	*NSMenuLocationsKey = @"NSMenuLocations";
 static NSString *NSEnqueuedMenuMoveName = @"EnqueuedMoveNotificationName";
 static NSNotificationCenter *nc;
 static BOOL menuBarVisible = YES;
+/* InSTEP §1.9.5 defect 55: the root of the transient tree currently on screen,
+   or nil. Not retained -- -displayTransient records it, -closeTransient and
+   -dealloc clear it. See +_instepOpenTransientRoot in NSMenu.h. */
+static NSMenu *_instepTransientRoot = nil;
 
 @interface	NSMenu (GNUstepPrivate)
 
@@ -475,6 +479,11 @@ static BOOL menuBarVisible = YES;
 - (void) dealloc
 {
   [nc removeObserver: self];
+
+  if (_instepTransientRoot == self)
+    {
+      _instepTransientRoot = nil;
+    }
 
   // Now clean the pointer to us stored each _items element
   [_items makeObjectsPerformSelector: @selector(setMenu:) withObject: nil];
@@ -1902,6 +1911,13 @@ static BOOL menuBarVisible = YES;
   
   _oldHiglightedIndex = [[self menuRepresentation] highlightedItemIndex];
   _menu.transient = YES;
+  /* InSTEP §1.9.5 defect 55: only the ROOT of a transient tree is recorded.
+     A submenu of a transient menu is itself transient, and closing the root
+     takes the whole tree with it. */
+  if (_superMenu == nil)
+    {
+      _instepTransientRoot = self;
+    }
 
   parentWindow = (_superMenu != nil) ? [_superMenu window] : [NSApp keyWindow];
   if (parentWindow == nil)
@@ -2040,6 +2056,10 @@ static BOOL menuBarVisible = YES;
   [[self menuRepresentation] setHighlightedItemIndex: _oldHiglightedIndex];
   
   _menu.transient = NO;
+  if (_instepTransientRoot == self)
+    {
+      _instepTransientRoot = nil;
+    }
   [_view update];
 }
 
@@ -2313,6 +2333,12 @@ static BOOL menuBarVisible = YES;
       menu = [menu attachedMenu];
     }
   return NO;
+}
+
+/* InSTEP §1.9.5 defect 55 -- see +_instepOpenTransientRoot below. */
++ (NSMenu *) _instepOpenTransientRoot
+{
+  return _instepTransientRoot;
 }
 
 /* InSTEP divergence D-023 / ADR-0023 -- see the declaration in NSMenu.h. */

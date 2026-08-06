@@ -2081,6 +2081,27 @@ _instepInSafeTriangle(NSPoint apex, NSRect target, NSPoint point,
    */
   indexOfActionToExecute = _highlightedItemIndex;
 
+  /* InSTEP §1.9.5 defect 55. The highlight is not always the row the release
+     landed on. While justAttachedNewSubmenu is set, section 2 above cannot
+     clear it unless a tracking sample finds a row, so section 4 never runs and
+     the highlight stays frozen on the row whose submenu is open however far
+     the pointer has since gone -- which is exactly the state D-023's grace
+     keeps this loop alive in. A release out there would then be read as a
+     release on that row: the teardown below would keep the tree ("this
+     release attached a submenu") and the click-outside branch would not run,
+     so the menu could not be dismissed at all. Measured: sampled=-1 while
+     hl=2, and the guard answered YES.
+
+     sampledIndex is the row the last tracking sample actually found, and is
+     already what 6.3l keys the loop's own exit on; this is the one downstream
+     site that still trusted the highlight. Narrow on purpose -- where section
+     4 is running the two agree, so this can only fire on the frozen state. */
+  if (justAttachedNewSubmenu && sampledIndex == -1
+      && indexOfActionToExecute != -1)
+    {
+      indexOfActionToExecute = -1;
+    }
+
   /* InSTEP §1.9.5 defect 50, unflagged. Case B(ii) above says "Keep attached
      menus", but the teardown below removes a *transient* menu unconditionally
      and a context menu is transient, so clicking a row that owns a submenu
