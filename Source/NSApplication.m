@@ -2197,6 +2197,27 @@ See -runModalForWindow:
 	    {
 	      [_main_menu _instepDismissOpenMenus];
 	    }
+	  /* InSTEP §1.9.5 defect 55. A transient menu is not below the main
+	     menu, so the walk above can never reach one. That did not matter
+	     while every transient menu was taken down the moment the gesture
+	     that raised it returned; since a click on a row that owns a submenu
+	     deliberately leaves the tree up, a transient menu can outlive its
+	     gesture and then nothing at all owned the click that should dismiss
+	     it. Measured with the hover grace OFF: the tracking loop had ended,
+	     the click arrived here, and both popups stayed on screen. */
+	  if ((type == NSLeftMouseDown || type == NSRightMouseDown
+	       || type == NSOtherMouseDown)
+	      && [NSMenu _instepDismissesMenusOnUse])
+	    {
+	      NSMenu *transient = [NSMenu _instepOpenTransientRoot];
+
+	      if (transient != nil
+		  && [transient _instepChainContainsWindow: window] == NO)
+		{
+		  [[transient menuRepresentation] detachSubmenu];
+		  [transient closeTransient];
+		}
+	    }
 	  if (window)
 	    [window sendEvent: theEvent];
 	  else if (type == NSRightMouseDown)

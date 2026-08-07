@@ -854,6 +854,20 @@ APPKIT_EXPORT_CLASS
  */
 - (BOOL) _instepChainContainsWindow: (NSWindow *)aWindow;
 
+/** The root transient menu currently on screen, or nil.
+ *
+ *  InSTEP §1.9.5 defect 55. A transient menu used to be taken down the moment
+ *  the gesture that raised it returned, so nothing ever had to find one from
+ *  the outside. Since a click on a row that owns a submenu deliberately leaves
+ *  the tree up, a transient menu can outlive its gesture, and the click-away
+ *  dismissal above has to be able to reach it -- it is not below the main menu
+ *  and so -_instepDismissOpenMenus can never find it.
+ *
+ *  Not retained: -displayTransient records the menu, -closeTransient and
+ *  -dealloc clear it.
+ */
++ (NSMenu *) _instepOpenTransientRoot;
+
 /* InSTEP submenu hover grace (divergence D-023, ADR-0023).
  *
  * A submenu opens the instant the pointer enters the row that owns it, and the
