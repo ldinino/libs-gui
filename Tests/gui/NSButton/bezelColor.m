@@ -31,7 +31,6 @@ centerColor(NSButton *b)
 int
 main(int argc, char **argv)
 {
-  CREATE_AUTORELEASE_POOL(arp);
   NSButton *b;
 
   START_SET("NSButton bezelColor")
@@ -57,6 +56,13 @@ main(int argc, char **argv)
     "the bezel color round-trips");
   [b setBezelColor: nil];
   PASS([b bezelColor] == nil, "the bezel color can be cleared");
+  PASS([b contentTintColor] == nil, "the content tint color is nil by default");
+  [b setContentTintColor: [NSColor blueColor]];
+  PASS([[b contentTintColor] isEqual: [NSColor blueColor]]
+    && [[[b cell] contentTintColor] isEqual: [NSColor blueColor]],
+    "the content tint color forwards to the cell");
+  [b setContentTintColor: nil];
+  PASS([b contentTintColor] == nil, "the content tint color can be cleared");
 
   NS_DURING
     {
@@ -88,8 +94,9 @@ main(int argc, char **argv)
             && [tinted redComponent] > [tinted greenComponent]
             && [tinted redComponent] > [tinted blueComponent],
             "a red bezel color makes the bezel red-dominant");
-          PASS([plain redComponent] <= [tinted redComponent]
-            && ([plain greenComponent] > 0.3 || [plain blueComponent] > 0.3),
+          PASS([plain redComponent] < 0.5
+            || [plain redComponent] <= [plain greenComponent]
+            || [plain redComponent] <= [plain blueComponent],
             "the default bezel is not the red tint");
         }
     }
@@ -103,6 +110,5 @@ main(int argc, char **argv)
 
   END_SET("NSButton bezelColor")
 
-  DESTROY(arp);
   return 0;
 }

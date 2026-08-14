@@ -310,10 +310,9 @@ static NSMenu *_instepTransientRoot = nil;
     {
       NSRect screenFrame = [[NSScreen mainScreen] frame];
 
-      NSRect proposedFrame = NSMakeRect(0, 
-		      			screenFrame.size.height -
-		      			[_aWindow frame].size.height +
-					screenFrame.origin.y,
+      NSRect proposedFrame = NSMakeRect(NSMinX(screenFrame),
+					NSMaxY(screenFrame) -
+					[_aWindow frame].size.height,
 					screenFrame.size.width,
 					[_aWindow frame].size.height);
       proposedFrame = [[GSTheme theme] modifyRect: proposedFrame
@@ -351,9 +350,10 @@ static NSMenu *_instepTransientRoot = nil;
       
       if ((_aWindow != nil) && ([_aWindow screen] != nil))
         {
-          NSPoint origin = NSMakePoint(0, [[_aWindow screen] visibleFrame].size.height 
-                               - [_aWindow frame].size.height);
-	  
+          NSRect  visible = [[_aWindow screen] visibleFrame];
+          NSPoint origin = NSMakePoint(NSMinX(visible),
+                               NSMaxY(visible) - [_aWindow frame].size.height);
+
           [_aWindow setFrameOrigin: origin];
           [_bWindow setFrameOrigin: origin];
         }
